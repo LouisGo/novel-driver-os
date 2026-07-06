@@ -3,6 +3,7 @@ import { readYaml, writeYaml } from "./fs-utils.js";
 import { projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
 import { RetconDebtSchema, RetconSeveritySchema } from "./schemas.js";
+import { appendTrace } from "./trace.js";
 
 export interface DebtAddOptions {
   chapter: string;
@@ -26,6 +27,11 @@ export async function addDebt(projectName: string, options: DebtAddOptions): Pro
   ledger.current_arc_total = ledger.entries.length;
   ledger.last_10_chapters = ledger.entries.slice(-10).length;
   await writeYaml(filePath, ledger);
+  await appendTrace(projectName, {
+    command: "debt.add",
+    artifacts: ["70_debt/retcon_debt.yaml"],
+    metadata: { chapter: options.chapter, severity },
+  });
 }
 
 export async function debtReport(projectName: string): Promise<string> {

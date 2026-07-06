@@ -2,6 +2,7 @@ import path from "node:path";
 import { ensureDir, listFilesRecursive, pathExists, readText, writeText } from "./fs-utils.js";
 import { assertSafeId, projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
+import { appendTrace } from "./trace.js";
 
 const HARDEN_FILES = [
   "volume_epic_summary.md",
@@ -75,6 +76,11 @@ ${common}保存那些不属于主线、没有明确伏笔标签、但具有“�
 - MVP placeholder: review source snippets and preserve strange, vivid, future-useful details here.
 `);
 
+  await appendTrace(projectName, {
+    command: "harden.volume",
+    artifacts: [path.relative(root, outputDir).replaceAll(path.sep, "/")],
+    metadata: { volume_id: volumeId },
+  });
   return outputDir;
 }
 

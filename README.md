@@ -116,6 +116,7 @@ MVP 支持这些轻标记：
 
 ```bash
 novel ingest black_tower ./sample-chapter.md
+novel route black_tower <inputId>
 novel intake chapter black_tower <inputId>
 ```
 
@@ -136,6 +137,31 @@ novel intake chapter black_tower <inputId>
 ```
 
 这些文件都是候选或报告，不会直接写入正史。
+
+## Creative Input Loop
+
+关键命令都支持 `--json`，GUI 可以只编排 CLI，不需要解析 Markdown。
+
+```bash
+novel status black_tower --json
+novel route black_tower <inputId> --json
+novel review queue black_tower --json
+novel review detail black_tower <inputId> --json
+novel review decide black_tower <inputId> --decision approve --json
+novel patch apply black_tower <inputId> --target plot --json
+novel context build black_tower --chapter ch0051 --json
+```
+
+主状态流：
+
+```text
+raw -> triaged -> routed -> pending_confirmation -> applied / archived / ignored
+```
+
+- `route` 生成 `00_inbox/routes/<inputId>.route.yaml`，并给出可执行 `next_commands`。
+- `review decide` 只记录作者决策，不写正史。
+- `patch apply` 只应用已 approve 的 `memory_patch.yaml`。
+- 关键动作会追加到项目根目录 `trace.jsonl`，用于 GUI 活动流和断点恢复。
 
 ## Confirm A Vibe
 

@@ -63,6 +63,30 @@ export async function validateProject(projectName: string): Promise<ValidationRe
     }
   }
 
+  const routeFiles = yamlFiles.filter((file) => /00_inbox\/routes\/.+\.route\.ya?ml$/.test(file));
+  for (const file of routeFiles) {
+    try {
+      const route = await readYaml(file);
+      if (!isRecord(route) || typeof route.input_id !== "string" || typeof route.primary_route !== "string" || !Array.isArray(route.next_commands)) {
+        errors.push(`Invalid route plan ${relative(root, file)}: missing input_id, primary_route or next_commands`);
+      }
+    } catch (error) {
+      errors.push(`Invalid route plan ${relative(root, file)}: ${(error as Error).message}`);
+    }
+  }
+
+  const reviewFiles = yamlFiles.filter((file) => /00_inbox\/reviews\/.+\.review\.ya?ml$/.test(file));
+  for (const file of reviewFiles) {
+    try {
+      const decision = await readYaml(file);
+      if (!isRecord(decision) || typeof decision.input_id !== "string" || !["approved", "rejected", "archived"].includes(String(decision.decision))) {
+        errors.push(`Invalid review decision ${relative(root, file)}: decision must be approved, rejected or archived`);
+      }
+    } catch (error) {
+      errors.push(`Invalid review decision ${relative(root, file)}: ${(error as Error).message}`);
+    }
+  }
+
   const intakeDirs = await listIntakeDirs(root);
   for (const dir of intakeDirs) {
     for (const file of INTAKE_FILES) {
@@ -87,6 +111,8 @@ export async function validateProject(projectName: string): Promise<ValidationRe
       errors.push("discarded_brilliance.md must mention resurrection_triggers");
     }
   }
+
+  await validateTraceFile(root, path.join(root, "trace.jsonl"), errors);
 
   return { ok: errors.length === 0, errors };
 }
@@ -219,4 +245,19 @@ async function validateRetconDebtProtocol(root: string, filePath: string, errors
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function validateTraceFile(root: string, filePath: string, errors: string[]): Promise<void> {
+  if (!(await pathExists(filePath))) return;
+  const lines = (await readText(filePath)).split(/\r?\n/).filter(Boolean);
+  for (const [index, line] of lines.entries()) {
+    try {
+      const event = JSON.parse(line);
+      if (!isRecord(event) || typeof event.event_id !== "string" || typeof event.command !== "string") {
+        errors.push(`${relative(root, filePath)} line ${index + 1} missing event_id or command`);
+      }
+    } catch (error) {
+      errors.push(`Invalid trace JSON ${relative(root, filePath)} line ${index + 1}: ${(error as Error).message}`);
+    }
+  }
 }

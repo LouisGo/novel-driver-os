@@ -2,6 +2,7 @@ import path from "node:path";
 import { listFilesRecursive, pathExists, readText, writeText } from "./fs-utils.js";
 import { projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
+import { appendTrace } from "./trace.js";
 
 export async function ghostScan(projectName: string): Promise<string> {
   const root = projectRoot(projectName);
@@ -38,6 +39,11 @@ suggested_future_use:
 `;
 
   await writeText(reportPath, report);
+  await appendTrace(projectName, {
+    command: "ghost.scan",
+    artifacts: ["ghost_resonance_report.md"],
+    metadata: { matches: matches.map((item) => item.id) },
+  });
   return reportPath;
 }
 

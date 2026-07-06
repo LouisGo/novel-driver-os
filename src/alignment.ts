@@ -4,6 +4,7 @@ import { listInputs } from "./input.js";
 import { projectRoot } from "./paths.js";
 import { localDate, nowIso } from "./time.js";
 import { AuthorInputPacket, IntentionHypothesesFileSchema } from "./schemas.js";
+import { appendTrace } from "./trace.js";
 
 export async function weeklyAlignment(projectName: string): Promise<string> {
   const root = projectRoot(projectName);
@@ -52,6 +53,11 @@ ${styleObservation}
 `;
 
   await writeText(reportPath, report);
+  await appendTrace(projectName, {
+    command: "align.weekly",
+    artifacts: [`60_alignment/weekly_reports/${date}_alignment_report.md`],
+    metadata: { input_counts: counts },
+  });
   return reportPath;
 }
 

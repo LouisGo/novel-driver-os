@@ -11,6 +11,11 @@ import { buildContextPacket } from "../src/context.js";
 import { hardenVolume } from "../src/harden.js";
 import { validateProject } from "../src/validate.js";
 import { ghostScan } from "../src/ghost.js";
+import { routeInput } from "../src/route.js";
+import { decideReview, listPendingApply, listReviewQueue } from "../src/review.js";
+import { applyMemoryPatch } from "../src/patch.js";
+import { getProjectStatus } from "../src/status.js";
+import { readTraceTail } from "../src/trace.js";
 
 test("validator rejects intention and retcon debt protocol violations", { concurrency: false }, async () => {
   await withProject(async (root) => {
@@ -99,6 +104,45 @@ test("chapter intake writes a chapter quality review", { concurrency: false }, a
 
     const result = await validateProject("black_tower");
     assert.equal(result.ok, true, result.errors.join("\n"));
+  });
+});
+
+test("creative input loop routes, reviews, applies and exposes GUI status", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const packet = await ingestChapter(root);
+
+    const route = await routeInput("black_tower", packet.input_id);
+    assert.equal(route.route_plan.primary_route, "human_chapter_intake");
+    assert.deepEqual(route.route_plan.next_commands, [`novel intake chapter black_tower ${packet.input_id}`]);
+
+    await createChapterIntake("black_tower", packet.input_id);
+    const queue = await listReviewQueue("black_tower");
+    assert.equal(queue.length, 1);
+    assert.equal(queue[0].input_id, packet.input_id);
+
+    const decision = await decideReview("black_tower", packet.input_id, "approve", "accept plot memory");
+    assert.equal(decision.decision.decision, "approved");
+    assert.equal((await listReviewQueue("black_tower")).length, 0);
+    assert.equal((await listPendingApply("black_tower")).length, 1);
+
+    const applied = await applyMemoryPatch("black_tower", packet.input_id, "plot");
+    assert.equal(applied.target, "plot");
+    assert.match(applied.patch_id, new RegExp(packet.input_id));
+    assert(applied.changed_files.includes("30_plot/timeline.jsonl"));
+
+    const timeline = await fs.readFile(path.join(root, "projects/black_tower/30_plot/timeline.jsonl"), "utf8");
+    assert.match(timeline, /source_patch/);
+
+    const status = await getProjectStatus("black_tower");
+    assert.equal(status.counts.by_status.applied, 1);
+    assert.equal(status.review_queue.length, 0);
+    assert.equal(status.pending_apply.length, 0);
+    assert.equal(status.validation.ok, true, status.validation.errors.join("\n"));
+
+    const trace = await readTraceTail("black_tower", 20);
+    assert(trace.some((event) => event.command === "route"));
+    assert(trace.some((event) => event.command === "review.decide"));
+    assert(trace.some((event) => event.command === "patch.apply"));
   });
 });
 

@@ -4,6 +4,7 @@ import { findPacket } from "./input.js";
 import { projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
 import { appendDiscardedBrillianceCandidate } from "./discarded.js";
+import { appendTrace } from "./trace.js";
 
 export async function createStyleCandidate(projectName: string, inputId: string): Promise<string> {
   const root = projectRoot(projectName);
@@ -41,5 +42,11 @@ status: candidate_only
     await appendDiscardedBrillianceCandidate(projectName, inputId, rawText);
   }
 
+  await appendTrace(projectName, {
+    command: "style.candidate",
+    input_id: inputId,
+    artifacts: ["40_style/style_candidates.md"],
+    metadata: { source_type: packet.detected_type },
+  });
   return projectStylePath;
 }

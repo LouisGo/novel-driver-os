@@ -4,6 +4,7 @@ import { ensureDir, readText, writeText, writeYaml } from "./fs-utils.js";
 import { assertSafeId, projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
 import { AuthorInputPacket } from "./schemas.js";
+import { appendTrace } from "./trace.js";
 
 export const INTAKE_FILES = [
   "fact_delta.yaml",
@@ -77,6 +78,14 @@ Unconfirmed but potentially useful vibes. These are short-term only and cannot e
     ],
   };
   await updatePacket(projectName, nextPacket, "processed");
+  await appendTrace(projectName, {
+    command: "intake.chapter",
+    input_id: inputId,
+    from_status: packet.status,
+    to_status: "pending_confirmation",
+    artifacts: INTAKE_FILES.map((file) => `01_intake/${inputId}/${file}`).concat(`01_intake/${inputId}/chapter_quality_review.md`),
+    metadata: { hypothesis_ids: ["vibe_a", "vibe_b", "vibe_c"] },
+  });
 
   return {
     inputId,
@@ -123,6 +132,15 @@ ${block.content.trim()}`)
 
 ${tentative || "_No tentative vibes._"}
 `);
+  await appendTrace(projectName, {
+    command: "confirm-vibe",
+    input_id: inputId,
+    artifacts: [
+      `01_intake/${inputId}/confirmed_vibes.md`,
+      `01_intake/${inputId}/tentative_vibes.md`,
+    ],
+    metadata: { hypothesis_id: hypothesisId },
+  });
 }
 
 function buildFactDelta(packet: AuthorInputPacket, rawText: string): unknown {

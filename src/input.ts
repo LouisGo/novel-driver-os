@@ -20,6 +20,7 @@ import {
 import { projectRoot, relativeToProject, safeName } from "./paths.js";
 import { compactTimestamp, nowIso } from "./time.js";
 import { appendDiscardedBrillianceCandidate } from "./discarded.js";
+import { appendTrace } from "./trace.js";
 
 export interface PacketLocation {
   packet: AuthorInputPacket;
@@ -47,6 +48,20 @@ export async function ingestInput(projectName: string, filePath: string): Promis
   if (packet.detected_type === "discarded_idea" && packet.status !== "ignored") {
     await appendDiscardedBrillianceCandidate(projectName, inputId, rawText);
   }
+  await appendTrace(projectName, {
+    command: "ingest",
+    input_id: inputId,
+    from_status: "raw",
+    to_status: packet.status,
+    artifacts: [
+      relativeToProject(projectName, rawTarget),
+      `00_inbox/${packetDir}/${inputId}.yaml`,
+    ],
+    metadata: {
+      detected_type: packet.detected_type,
+      authority_level: packet.authority_level,
+    },
+  });
   return packet;
 }
 
@@ -85,6 +100,13 @@ export async function ignoreInput(projectName: string, inputId: string): Promise
   const { packet } = await findPacket(projectName, inputId);
   const next = { ...packet, status: "ignored" as InputStatus, requires_confirmation: false };
   await updatePacket(projectName, next, "ignored");
+  await appendTrace(projectName, {
+    command: "ignore-input",
+    input_id: inputId,
+    from_status: packet.status,
+    to_status: "ignored",
+    artifacts: [`00_inbox/ignored/${inputId}.yaml`],
+  });
   return next;
 }
 

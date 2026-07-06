@@ -25,6 +25,11 @@ const PROJECT_DIRS = [
   "90_archive",
 ];
 
+const OPTIONAL_PROJECT_DIRS = [
+  "00_inbox/routes",
+  "00_inbox/reviews",
+];
+
 export const REQUIRED_PROJECT_DIRS = PROJECT_DIRS;
 
 export const REQUIRED_PROJECT_FILES = [
@@ -54,7 +59,7 @@ export async function initProject(projectName: string): Promise<string> {
     throw new Error(`Project already exists: ${root}`);
   }
 
-  for (const dir of PROJECT_DIRS) {
+  for (const dir of [...PROJECT_DIRS, ...OPTIONAL_PROJECT_DIRS]) {
     await ensureDir(path.join(root, dir));
   }
 
@@ -208,6 +213,7 @@ exploration_axes:
     threshold: 3,
     entries: [],
   });
+  await writeText(path.join(root, "trace.jsonl"), "");
 
   await writeText(path.join(root, "README.md"), `# ${projectName}
 

@@ -3,6 +3,7 @@ import { listFilesRecursive, pathExists, readText, readYaml, writeText } from ".
 import { assertSafeId, projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
 import { FactDeltaSchema } from "./schemas.js";
+import { appendTrace } from "./trace.js";
 
 export async function buildContextPacket(projectName: string, chapter: string): Promise<string> {
   assertSafeId(chapter, "chapter");
@@ -46,6 +47,11 @@ export async function buildContextPacket(projectName: string, chapter: string): 
   }
 
   await writeText(outputPath, body.join("\n"));
+  await appendTrace(projectName, {
+    command: "context.build",
+    artifacts: [path.relative(root, outputPath).replaceAll(path.sep, "/")],
+    metadata: { chapter },
+  });
   return outputPath;
 }
 

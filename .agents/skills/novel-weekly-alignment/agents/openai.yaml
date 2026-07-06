@@ -1,3 +1,3 @@
 interface:
-  display_name: "周期作者对齐"
-  short_description: "回顾系统理解、文风偏移、AI 偏差和下周策略"
+  display_name: "周期质量对齐"
+  short_description: "回顾意图、文风、追读、爽点、钩子和质量趋势"

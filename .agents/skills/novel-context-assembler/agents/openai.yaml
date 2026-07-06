@@ -1,3 +1,3 @@
 interface:
   display_name: "上下文组装"
-  short_description: "为下一步写作或审稿组装安全上下文包"
+  short_description: "为写作或审稿选择上下文、质量趋势和 must-fix"

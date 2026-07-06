@@ -1,3 +1,3 @@
 interface:
   display_name: "创作接入胶囊"
-  short_description: "生成事实、氛围、意图、冲突、文风和记忆补丁文件包"
+  short_description: "生成接入胶囊，并补充章节质量审稿"

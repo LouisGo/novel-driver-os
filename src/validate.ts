@@ -2,7 +2,7 @@ import path from "node:path";
 import YAML from "yaml";
 import { listFilesRecursive, pathExists, readText, readYaml } from "./fs-utils.js";
 import { projectRoot } from "./paths.js";
-import { INTAKE_FILES } from "./intake.js";
+import { INTAKE_FILES, OPTIONAL_INTAKE_FILES } from "./intake.js";
 import { REQUIRED_PROJECT_DIRS, REQUIRED_PROJECT_FILES } from "./project.js";
 import {
   AuthorInputPacketSchema,
@@ -75,6 +75,7 @@ export async function validateProject(projectName: string): Promise<ValidationRe
     await validateAtmosphereTriads(root, path.join(dir, "atmosphere_triads.md"), errors);
     await validateVibeFiles(root, dir, errors);
     await validateMemoryPatch(root, path.join(dir, "memory_patch.yaml"), errors);
+    await validateOptionalIntakeFiles(root, dir, errors);
   }
 
   await validateRetconDebtProtocol(root, path.join(root, "70_debt/retcon_debt.yaml"), errors);
@@ -173,6 +174,31 @@ async function validateMemoryPatch(root: string, filePath: string, errors: strin
     }
   } catch (error) {
     errors.push(`Invalid ${relative(root, filePath)}: ${(error as Error).message}`);
+  }
+}
+
+async function validateOptionalIntakeFiles(root: string, dir: string, errors: string[]): Promise<void> {
+  for (const file of OPTIONAL_INTAKE_FILES) {
+    const filePath = path.join(dir, file);
+    if (!(await pathExists(filePath))) continue;
+    const text = await readText(filePath);
+    if (file === "chapter_quality_review.md") validateChapterQualityReview(root, filePath, text, errors);
+  }
+}
+
+function validateChapterQualityReview(root: string, filePath: string, text: string, errors: string[]): void {
+  for (const required of ["review_type: chapter_quality_review", "overall_score:", "decision:", "## Scorecard", "## Revision Prescription"]) {
+    if (!text.includes(required)) {
+      errors.push(`${relative(root, filePath)} missing ${required}`);
+    }
+  }
+  const decision = text.match(/^decision:\s*(\S+)/m)?.[1];
+  if (decision && !["pass", "minor_revision", "major_revision", "rewrite"].includes(decision)) {
+    errors.push(`${relative(root, filePath)} has invalid decision ${decision}`);
+  }
+  const scoreValue = Number(text.match(/^overall_score:\s*([0-9.]+)/m)?.[1]);
+  if (!Number.isFinite(scoreValue) || scoreValue < 1 || scoreValue > 5) {
+    errors.push(`${relative(root, filePath)} overall_score must be between 1 and 5`);
   }
 }
 

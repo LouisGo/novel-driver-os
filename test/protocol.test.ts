@@ -66,6 +66,24 @@ test("confirmed vibes lose tentative metadata and tentative context expires", { 
   });
 });
 
+test("chapter intake writes a chapter quality review", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const packet = await ingestChapter(root);
+    await createChapterIntake("black_tower", packet.input_id);
+
+    const reviewPath = path.join(root, "projects/black_tower/01_intake", packet.input_id, "chapter_quality_review.md");
+    const review = await fs.readFile(reviewPath, "utf8");
+    assert.match(review, /review_type: chapter_quality_review/);
+    assert.match(review, /overall_score:\s*[0-9.]+/);
+    assert.match(review, /decision:\s*(pass|minor_revision|major_revision|rewrite)/);
+    assert.match(review, /## Scorecard/);
+    assert.match(review, /主角锚定/);
+
+    const result = await validateProject("black_tower");
+    assert.equal(result.ok, true, result.errors.join("\n"));
+  });
+});
+
 test("unsafe file-system ids are rejected", { concurrency: false }, async () => {
   await withTempCwd(async () => {
     await assert.rejects(() => initProject("../escaped_project"), /safe file-system id/);

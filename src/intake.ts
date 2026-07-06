@@ -18,6 +18,10 @@ export const INTAKE_FILES = [
   "alignment_questions.md",
 ];
 
+export const OPTIONAL_INTAKE_FILES = [
+  "chapter_quality_review.md",
+];
+
 export interface IntakeResult {
   inputId: string;
   intakeDir: string;
@@ -59,6 +63,7 @@ Unconfirmed but potentially useful vibes. These are short-term only and cannot e
   await writeText(path.join(intakeDir, "style_candidates.md"), buildStyleCandidates(packet, rawText));
   await writeYaml(path.join(intakeDir, "memory_patch.yaml"), buildMemoryPatch(packet, rawText));
   await writeText(path.join(intakeDir, "alignment_questions.md"), buildAlignmentQuestions(packet));
+  await writeText(path.join(intakeDir, "chapter_quality_review.md"), buildChapterQualityReview(packet, rawText));
 
   const nextPacket: AuthorInputPacket = {
     ...packet,
@@ -68,6 +73,7 @@ Unconfirmed but potentially useful vibes. These are short-term only and cannot e
       "confirm_or_reject_vibe",
       "review_intention_hypotheses",
       "approve_or_reject_memory_patch",
+      "review_chapter_quality",
     ],
   };
   await updatePacket(projectName, nextPacket, "processed");
@@ -295,6 +301,297 @@ function buildAlignmentQuestions(packet: AuthorInputPacket): string {
 2. L2 意图“保留潜台词而不说破”是否符合你的真实意图？
 3. 这段内容是否允许进入长期记忆，还是只作为短期候选？
 `;
+}
+
+type QualityDecision = "pass" | "minor_revision" | "major_revision" | "rewrite";
+
+interface QualityDimension {
+  key: string;
+  label: string;
+  score: number;
+  evidence: string[];
+  fix: string;
+}
+
+function buildChapterQualityReview(packet: AuthorInputPacket, rawText: string): string {
+  const chapter = packet.target_scope.chapter ?? "unknown_chapter";
+  const lines = meaningfulLines(rawText);
+  const firstLine = lines[0] ?? "";
+  const firstWindow = lines.slice(0, 6).join(" ").slice(0, 800);
+  const tail = lines.slice(-6).join(" ");
+  const chapterText = lines.join("\n");
+  const risks = collectTextSignals(chapterText, firstLine, tail);
+
+  const dimensions = buildQualityDimensions(firstLine, firstWindow, tail, chapterText, risks);
+  const hardGates = buildHardGates(dimensions, firstLine, firstWindow, tail, risks);
+  const overallScore = roundScore(dimensions.reduce((sum, item) => sum + item.score, 0) / dimensions.length);
+  const decision = decisionFor(overallScore, hardGates);
+  const mustFix = revisionMustFix(dimensions, hardGates);
+  const optional = dimensions
+    .filter((item) => item.score < 4.2 && !mustFix.includes(item.fix))
+    .slice(0, 3)
+    .map((item) => item.fix);
+
+  return `# Chapter Quality Review - ${packet.input_id}
+
+review_type: chapter_quality_review
+chapter: ${chapter}
+source_input: ${packet.input_id}
+generated_at: ${nowIso()}
+rubric: novel-human-chapter-intake/references/chapter-quality-rubric.md
+status: heuristic_review
+
+## Summary
+
+overall_score: ${overallScore.toFixed(2)}
+decision: ${decision}
+
+硬门槛：
+${hardGates.length > 0 ? hardGates.map((item) => `- ${item}`).join("\n") : "- none"}
+
+> 本报告是确定性启发式审稿，用于让 intake 自动产生可追踪质量检查；关键章节仍建议人工复核。
+
+## Scorecard
+
+| 维度 | 分数 | 证据 | 最小改法 |
+| --- | ---: | --- | --- |
+${dimensions.map((item) => `| ${item.label} | ${item.score.toFixed(1)} | ${item.evidence.map(quoteEvidence).join("<br>")} | ${item.fix} |`).join("\n")}
+
+## Opening Audit
+
+- first_sentence_hook: ${quoteEvidence(firstLine || "无有效正文首句")}
+- first_300_to_800_chars: ${quoteEvidence(firstWindow || "无有效开头文本")}
+- protagonist_focus: ${risks.protagonistAnchor ? "yes" : "weak_or_indirect"}
+
+## Hook Ladder Audit
+
+- opening_hook: ${risks.openingHook ? "present" : "weak"}
+- chapter_end_hook: ${risks.chapterEndHook ? quoteEvidence(tail.slice(-160) || tail) : "weak_or_missing"}
+- long_hook_candidates:
+${longHookCandidates(chapterText).map((item) => `  - ${item}`).join("\n") || "  - none"}
+
+## Reader Emotion Curve
+
+- pressure: ${risks.pressure ? "present" : "weak"}
+- curiosity: ${risks.curiosity ? "present" : "weak"}
+- payoff: ${risks.payoff ? "present" : "weak"}
+- aftertaste: ${risks.chapterEndHook ? "has_followup_question" : "flat"}
+
+## Human Texture Audit
+
+- effective_details:
+${risks.humanTextureEvidence.map((item) => `  - ${quoteEvidence(item)}`).join("\n") || "  - none"}
+- ai_flavor_risk_terms: ${risks.aiFlavorRiskCount}
+
+## Revision Prescription
+
+must_fix_now:
+${mustFix.length > 0 ? mustFix.map((item) => `  - ${item}`).join("\n") : "  - none"}
+optional:
+${optional.length > 0 ? optional.map((item) => `  - ${item}`).join("\n") : "  - none"}
+
+author_questions:
+  - 本章最想让读者追问的问题是否就是当前章末钩子？
+  - 主角本章的小胜和代价是否符合你的真实意图？
+`;
+}
+
+function buildQualityDimensions(
+  firstLine: string,
+  firstWindow: string,
+  tail: string,
+  chapterText: string,
+  risks: ReturnType<typeof collectTextSignals>,
+): QualityDimension[] {
+  return [
+    {
+      key: "protagonist_anchor",
+      label: "主角锚定",
+      score: score(risks.protagonistAnchor ? 4.5 : 3.4, risks.environmentOpening ? -0.4 : 0),
+      evidence: [firstLine || "无有效正文首句"],
+      fix: risks.protagonistAnchor ? "保持第一屏围绕主角压力、判断和行动。" : "把第一屏改为主角正在承受的具体压力或选择，世界信息从主角处境进入。",
+    },
+    {
+      key: "opening_attraction",
+      label: "开篇吸引力",
+      score: score(risks.openingHook ? 4.4 : 3.3, risks.pressure ? 0.2 : 0),
+      evidence: [firstLine || "无有效正文首句"],
+      fix: risks.openingHook ? "保留开篇异常/危险，避免前置说明削弱冲击。" : "首段加入异常、危险、冲突、反差或具体问题，避免平铺环境。",
+    },
+    {
+      key: "goal_pressure_action",
+      label: "目标-压力-行动链",
+      score: score(3.4, risks.pressure ? 0.3 : 0, risks.action ? 0.4 : 0, risks.goal ? 0.3 : 0),
+      evidence: [firstWindow || firstLine],
+      fix: risks.action ? "继续让主角用选择改变局面。" : "补出主角要什么、阻碍是什么、他主动做了什么。",
+    },
+    {
+      key: "payoff",
+      label: "爽点/情绪回报",
+      score: score(3.3, risks.payoff ? 0.7 : 0, risks.cost ? 0.2 : 0),
+      evidence: risks.payoffEvidence.length > 0 ? risks.payoffEvidence : [tail || firstWindow],
+      fix: risks.payoff ? "保留局部回报，并确保它由主角行动触发。" : "给本章增加一次局部回报：规则突破、信息揭示、关系推进或压迫反转。",
+    },
+    {
+      key: "hook_ladder",
+      label: "钩子阶梯",
+      score: score(3.5, risks.openingHook ? 0.3 : 0, risks.chapterEndHook ? 0.6 : 0),
+      evidence: [tail || firstWindow],
+      fix: risks.chapterEndHook ? "章末钩子可用，下一章需要回应具体问题。" : "把最后 3-5 行改成具体下一章期待，不用空泛预告。",
+    },
+    {
+      key: "pacing_info_load",
+      label: "信息投放与节奏",
+      score: score(4.2, risks.infoLoadRisk ? -0.5 : 0, risks.paragraphUniformityRisk ? -0.2 : 0),
+      evidence: [firstWindow || firstLine],
+      fix: risks.infoLoadRisk ? "减少一次性术语解释，把设定压进冲突、后果和选择。" : "维持设定随行动进入，不要额外补设定集段落。",
+    },
+    {
+      key: "human_texture",
+      label: "人味与质感",
+      score: score(3.5, Math.min(0.9, risks.humanTextureEvidence.length * 0.18)),
+      evidence: risks.humanTextureEvidence.length > 0 ? risks.humanTextureEvidence.slice(0, 3) : [firstWindow || firstLine],
+      fix: risks.humanTextureEvidence.length > 0 ? "保留服务人物的具体细节，避免堆无关素材。" : "补 1-2 个能暴露人物处境、习惯、恐惧或关系的具体细节。",
+    },
+    {
+      key: "ai_flavor",
+      label: "AI 味与文风风险",
+      score: score(4.4, risks.aiFlavorRiskCount >= 4 ? -0.6 : 0, risks.aiFlavorRiskCount >= 8 ? -0.5 : 0),
+      evidence: [`高风险词命中：${risks.aiFlavorRiskCount}`],
+      fix: risks.aiFlavorRiskCount >= 4 ? "减少机械过渡和空泛形容词，用具体动作、物件和判断替代。" : "当前 AI 味风险可控，继续保持句式和段落重心变化。",
+    },
+    {
+      key: "poison_risk",
+      label: "毒点与信任",
+      score: score(4.0, risks.cost ? 0.3 : -0.1, risks.systemPanelRisk ? -0.7 : 0),
+      evidence: risks.costEvidence.length > 0 ? risks.costEvidence : [firstWindow || firstLine],
+      fix: risks.cost ? "保留能力代价和边界，避免无代价外挂。" : "给主角的突破补出代价、失败风险或能力边界。",
+    },
+    {
+      key: "serial_sustainability",
+      label: "长篇可持续性",
+      score: score(3.7, risks.curiosity ? 0.4 : 0, risks.chapterEndHook ? 0.3 : 0),
+      evidence: longHookCandidates(chapterText).slice(0, 3),
+      fix: risks.curiosity ? "保留长线问题，不要过早解释核心谜底。" : "补出一个可持续的关系、伏笔、债务或目标。",
+    },
+  ];
+}
+
+function collectTextSignals(chapterText: string, firstLine: string, tail: string) {
+  const environmentOpeningSignal = isEnvironmentOpening(firstLine);
+  const protagonistAnchor = /林砚|主角|他|她|我/.test(firstLine) && !environmentOpeningSignal;
+  const openingHook = /刀|血|死|醒|追|逃|审判|失控|不能|没有|吐|痛|危险|杀|问|错|门锁/.test(firstLine);
+  const pressure = /死|杀|刀|血|疼|痛|追|逃|审判|危险|失控|不能|必须|代价|忘|丢/.test(chapterText);
+  const action = /写|划|挡|跑|逃|问|抓|按|推|救|证明|看|撬|拔|压|补|喝|藏/.test(chapterText);
+  const goal = /要|想|必须|不能|证明|活|找|救|逃|知道|确认/.test(chapterText);
+  const payoffTerms = chapterText.match(/反噬|证明|露馅|改口|熄灭|救|赢|发现|断开|指向|看见|活下来/g) ?? [];
+  const payoff = payoffTerms.length > 0;
+  const costTerms = chapterText.match(/代价|忘|失去|丢|疼|痛|伤|血|不能|风险|记忆|声音/g) ?? [];
+  const cost = costTerms.length > 0;
+  const chapterEndHook = /[？?]|响|声音|浮现|看见|回答|等|呼吸|名字|钟|龙|红纹|低下头|安静/.test(tail);
+  const curiosity = /为什么|谁|名字|残页|旧案|债名|黑钟|龙|秘密|真相|不是/.test(chapterText);
+  const infoLoadRisk = (chapterText.match(/世界|规则|契约|教会|龙语|债名|银盐|誊本|灰港|黑钟/g) ?? []).length > 36;
+  const paragraphLengths = chapterText.split(/\n\s*\n/).map((paragraph) => paragraph.trim().length).filter(Boolean);
+  const paragraphUniformityRisk = paragraphLengths.length > 8 && paragraphLengths.every((value) => value >= 40 && value <= 180);
+  const humanTextureMatches = chapterText.match(/母亲|手机号|小名|面包|鞋|老人|小女孩|栗子|木牌|手套|语音|文档|电|门禁|汗|血|舌尖|指甲|早餐|旧伤|斗篷|鱼骨/g) ?? [];
+  const humanTextureEvidence = evidenceForKeywords(chapterText, humanTextureMatches.slice(0, 5));
+  const aiFlavorRiskCount = (chapterText.match(/然而|仿佛|某种|显得|由此可见|总的来说|古老|神秘|宏伟/g) ?? []).length;
+  const systemPanelRisk = /系统提示|系统面板|属性面板|任务奖励|面板|等级/.test(chapterText);
+  const payoffEvidence = evidenceForKeywords(chapterText, payoffTerms.slice(0, 4));
+  const costEvidence = evidenceForKeywords(chapterText, costTerms.slice(0, 4));
+  return {
+    protagonistAnchor,
+    environmentOpening: environmentOpeningSignal,
+    openingHook,
+    pressure,
+    action,
+    goal,
+    payoff,
+    payoffEvidence,
+    cost,
+    costEvidence,
+    chapterEndHook,
+    curiosity,
+    infoLoadRisk,
+    paragraphUniformityRisk,
+    humanTextureEvidence,
+    aiFlavorRiskCount,
+    systemPanelRisk,
+  };
+}
+
+function isEnvironmentOpening(line: string): boolean {
+  return /^(灰港|旧|抄写|城|夜|天|雨|风|雾|世界|大陆|王朝|山|海|库房|礼拜堂)/.test(line.trim());
+}
+
+function buildHardGates(
+  dimensions: QualityDimension[],
+  firstLine: string,
+  firstWindow: string,
+  tail: string,
+  risks: ReturnType<typeof collectTextSignals>,
+): string[] {
+  const gates: string[] = [];
+  if (!risks.protagonistAnchor && risks.environmentOpening) {
+    gates.push("开头主要从环境/地点进入，主角锚定偏弱。");
+  }
+  if (!risks.curiosity) {
+    gates.push("本章缺少明确读者问题。");
+  }
+  if (!risks.action) {
+    gates.push("主角行动链偏弱。");
+  }
+  if (!risks.chapterEndHook) {
+    gates.push("章末钩子偏弱。");
+  }
+  if (risks.infoLoadRisk && firstWindow.length > 600) {
+    gates.push("设定名词密度偏高，有设定集开篇风险。");
+  }
+  if (dimensions.some((item) => item.score < 3)) {
+    gates.push("存在低于 3 分的核心维度。");
+  }
+  void firstLine;
+  void tail;
+  return gates;
+}
+
+function decisionFor(scoreValue: number, hardGates: string[]): QualityDecision {
+  if (scoreValue < 3 || hardGates.length >= 2) return "rewrite";
+  if (scoreValue < 3.6 || hardGates.length === 1) return "major_revision";
+  if (scoreValue < 4) return "minor_revision";
+  return "pass";
+}
+
+function revisionMustFix(dimensions: QualityDimension[], hardGates: string[]): string[] {
+  if (hardGates.length > 0) return hardGates.slice(0, 3);
+  return dimensions
+    .filter((item) => item.score < 3.8)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 3)
+    .map((item) => item.fix);
+}
+
+function longHookCandidates(chapterText: string): string[] {
+  const keywords = ["名字", "债名", "残页", "黑钟", "龙", "旧案", "红纹", "教会", "艾琳娜", "记忆"];
+  const found = keywords.filter((keyword) => chapterText.includes(keyword));
+  return found.map((keyword) => `${keyword} 相关长线问题`);
+}
+
+function evidenceForKeywords(chapterText: string, keywords: string[]): string[] {
+  const unique = [...new Set(keywords)].slice(0, 4);
+  const lines = meaningfulLines(chapterText);
+  return unique
+    .map((keyword) => lines.find((line) => line.includes(keyword)))
+    .filter((value): value is string => Boolean(value))
+    .filter((value, index, values) => values.indexOf(value) === index);
+}
+
+function score(base: number, ...deltas: number[]): number {
+  return roundScore(Math.max(1, Math.min(5, base + deltas.reduce((sum, value) => sum + value, 0))));
+}
+
+function roundScore(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function parseVibeBlocks(markdown: string): Array<{ id: string; content: string }> {

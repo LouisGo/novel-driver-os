@@ -1,3 +1,3 @@
 interface:
-  display_name: "正史冲突检查"
-  short_description: "检查设定、时间线、人物状态和留白冲突"
+  display_name: "正史与信任检查"
+  short_description: "检查正史冲突、留白写死和读者信任毒点"

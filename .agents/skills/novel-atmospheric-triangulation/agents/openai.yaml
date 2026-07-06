@@ -1,3 +1,3 @@
 interface:
-  display_name: "氛围三角验证"
-  short_description: "为章节生成三种有原文证据的氛围假设"
+  display_name: "氛围与情绪三角"
+  short_description: "为章节氛围和读者情绪功能生成三种证据假设"

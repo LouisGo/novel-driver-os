@@ -153,6 +153,8 @@ export const StorycraftKindSchema = z.enum([
   "payoff",
   "emotion",
   "brief",
+  "gene",
+  "serial_plan",
 ]);
 
 export const StorycraftManifestSchema = z.object({
@@ -174,6 +176,128 @@ export const StorycraftManifestSchema = z.object({
 
 export type StorycraftKind = z.infer<typeof StorycraftKindSchema>;
 export type StorycraftManifest = z.infer<typeof StorycraftManifestSchema>;
+
+export const GeneFieldStatusSchema = z.enum(["candidate_only", "experimental", "approved_reference", "rejected"]);
+
+const SourceRefSchema = z.object({
+  file: z.string().min(1).optional(),
+  input_id: SafeIdSchema.optional(),
+  quote: z.string().optional(),
+}).passthrough();
+
+const GeneValueSchema = z.object({
+  value: z.union([z.string(), z.array(z.string()), z.record(z.unknown())]).nullable(),
+  status: GeneFieldStatusSchema,
+  source_refs: z.array(SourceRefSchema).default([]),
+}).passthrough();
+
+export const StoryEngineSchema = z.object({
+  core_emotion: GeneValueSchema,
+  genre_contracts: z.array(GeneValueSchema).default([]),
+  story_engines: z.array(z.object({
+    name: z.string().min(1),
+    status: GeneFieldStatusSchema,
+    effective_scope: z.string().nullable().default(null),
+    source_refs: z.array(SourceRefSchema).default([]),
+  }).passthrough()).default([]),
+  world_machine: z.object({
+    resources: GeneValueSchema,
+    hierarchy: GeneValueSchema,
+    rules: GeneValueSchema,
+    taboos: GeneValueSchema,
+    secrets: GeneValueSchema,
+  }),
+  character_engine: GeneValueSchema,
+  serial_policy: GeneValueSchema,
+  anti_genes: z.array(z.object({
+    id: SafeIdSchema,
+    description: z.string().min(1),
+    status: GeneFieldStatusSchema.default("candidate_only"),
+    source_refs: z.array(SourceRefSchema).default([]),
+  }).passthrough()).default([]),
+  gene_drift_candidates: z.array(z.object({
+    from: z.string().min(1),
+    to: z.string().min(1),
+    evidence: z.array(z.string()),
+    possible_interpretations: z.array(z.string()),
+    requires_author_alignment: z.literal(true),
+  }).passthrough()).default([]),
+  updated_at: z.string().min(1),
+});
+
+export const PromiseOriginSchema = z.enum(["author_explicit", "text_explicit", "genre_expectation", "ai_inference", "reader_likely"]);
+export const PromiseObligationLevelSchema = z.enum(["hard", "soft", "optional", "speculative"]);
+export const PromiseStatusSchema = z.enum(["open", "delayed", "paid", "transformed", "red_herring", "abandoned", "dropped_candidate"]);
+export const PayoffModeSchema = z.enum(["direct", "emotional_echo", "inversion", "escalation", "substitution", "red_herring", "abandoned_by_author"]);
+export const PayoffQualitySchema = z.enum(["expected", "underpaid", "overpaid", "risky", "unknown"]);
+export const TensionPolicySchema = z.enum(["allow_delay", "resolve_soon", "keep_ambiguous", "drop"]);
+
+export const PromiseEntrySchema = z.object({
+  id: SafeIdSchema,
+  type: z.enum(["identity", "mystery", "relationship", "payoff", "resource", "world_rule", "antagonist", "emotion", "other"]),
+  origin: PromiseOriginSchema,
+  confidence: z.number().min(0).max(1),
+  obligation_level: PromiseObligationLevelSchema,
+  source_chapter: z.string().min(1),
+  reader_expectation: z.string().min(1),
+  author_intended_strategy: z.string().nullable().default(null),
+  tension_policy: TensionPolicySchema.default("allow_delay"),
+  status: PromiseStatusSchema,
+  suggested_payoff_window: z.string().nullable().default(null),
+  last_touched_chapter: z.string().nullable().default(null),
+  payoff_mode: PayoffModeSchema.nullable().default(null),
+  payoff_quality: PayoffQualitySchema.default("unknown"),
+  risk: z.enum(["low", "medium", "high", "unknown"]).default("unknown"),
+  source_refs: z.array(SourceRefSchema),
+  updated_at: z.string().min(1),
+}).superRefine((value, ctx) => {
+  if (value.origin === "ai_inference" && value.obligation_level !== "speculative") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["obligation_level"],
+      message: "ai_inference promises must remain speculative until author confirmation",
+    });
+  }
+});
+
+export const PromiseLedgerSchema = z.object({
+  promises: z.array(PromiseEntrySchema),
+  updated_at: z.string().min(1),
+});
+
+export const PromisePatchOperationSchema = z.object({
+  op: z.enum(["add_candidate", "touch", "pay_candidate", "transform_candidate", "drop_candidate"]),
+  promise_id: SafeIdSchema.optional(),
+  promise: PromiseEntrySchema.optional(),
+  reason: z.string().min(1).optional(),
+  payoff_mode: PayoffModeSchema.optional(),
+  payoff_quality: PayoffQualitySchema.optional(),
+  evidence: z.array(z.string()).default([]),
+  origin: PromiseOriginSchema,
+  confidence: z.number().min(0).max(1),
+  requires_human_approval: z.literal(true),
+}).superRefine((value, ctx) => {
+  if (value.op === "add_candidate" && !value.promise) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["promise"], message: "add_candidate requires promise" });
+  }
+  if (value.op !== "add_candidate" && !value.promise_id) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["promise_id"], message: `${value.op} requires promise_id` });
+  }
+});
+
+export const PromisePatchSchema = z.object({
+  patch_id: SafeIdSchema,
+  source_input: SafeIdSchema,
+  requires_human_approval: z.literal(true),
+  created_at: z.string().min(1),
+  operations: z.array(PromisePatchOperationSchema),
+});
+
+export type GeneFieldStatus = z.infer<typeof GeneFieldStatusSchema>;
+export type StoryEngine = z.infer<typeof StoryEngineSchema>;
+export type PromiseEntry = z.infer<typeof PromiseEntrySchema>;
+export type PromiseLedger = z.infer<typeof PromiseLedgerSchema>;
+export type PromisePatch = z.infer<typeof PromisePatchSchema>;
 
 export const ProjectSchema = z.object({
   name: SafeIdSchema,

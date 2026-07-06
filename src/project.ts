@@ -32,6 +32,8 @@ const OPTIONAL_PROJECT_DIRS = [
   "35_storycraft/payoff",
   "35_storycraft/emotion",
   "35_storycraft/brief",
+  "35_storycraft/gene",
+  "35_storycraft/serial_plan",
   "50_chapters/variants",
   "90_archive/snapshots",
 ];
@@ -93,6 +95,8 @@ AI 不能直接修改本文件。所有正史变更必须先进入 memory_patch.
 
 _No confirmed canon yet._
 `);
+
+  await writeYaml(path.join(root, "10_bible/story_engine.yaml"), defaultStoryEngine());
 
   await writeYaml(path.join(root, "10_bible/book_profile.yaml"), {
     title: projectName,
@@ -169,6 +173,7 @@ _None yet._
 
 _No unresolved hooks yet._
 `);
+  await writeYaml(path.join(root, "30_plot/promise_ledger.yaml"), defaultPromiseLedger());
 
   await writeText(path.join(root, "40_style/style_bible.md"), `# Style Bible
 
@@ -251,7 +256,7 @@ This is a Novel Driver OS project.
 - \`10_bible/\`: long-term canon-facing memory. AI writes proposals, not canon.
 - \`20_entities/\`: character, faction, location and item state.
 - \`30_plot/\`: timeline, event ledger, foreshadowing and unresolved hooks.
-- \`35_storycraft/\`: premise, payoff, emotion curve and chapter brief artifacts.
+- \`35_storycraft/\`: premise, payoff, emotion curve, chapter brief, gene and serial plan artifacts.
 - \`40_style/\`: confirmed style, aspirational style, anti-style and discarded brilliance.
 - \`50_chapters/\`: hot, warm and cold chapter layers.
 - \`60_alignment/\`: weekly author alignment reports.
@@ -261,4 +266,43 @@ This is a Novel Driver OS project.
 `);
 
   return root;
+}
+
+export function defaultStoryEngine(): unknown {
+  return {
+    core_emotion: {
+      value: null,
+      status: "candidate_only",
+      source_refs: [],
+    },
+    genre_contracts: [],
+    story_engines: [],
+    world_machine: {
+      resources: { value: null, status: "candidate_only", source_refs: [] },
+      hierarchy: { value: null, status: "candidate_only", source_refs: [] },
+      rules: { value: null, status: "candidate_only", source_refs: [] },
+      taboos: { value: null, status: "candidate_only", source_refs: [] },
+      secrets: { value: null, status: "candidate_only", source_refs: [] },
+    },
+    character_engine: {
+      value: null,
+      status: "candidate_only",
+      source_refs: [],
+    },
+    serial_policy: {
+      value: null,
+      status: "candidate_only",
+      source_refs: [],
+    },
+    anti_genes: [],
+    gene_drift_candidates: [],
+    updated_at: nowIso(),
+  };
+}
+
+export function defaultPromiseLedger(): unknown {
+  return {
+    promises: [],
+    updated_at: nowIso(),
+  };
 }

@@ -2,7 +2,7 @@ import path from "node:path";
 import { listFilesRecursive, pathExists, readText, readYaml, writeText } from "./fs-utils.js";
 import { assertSafeId, projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
-import { FactDeltaSchema } from "./schemas.js";
+import { PromiseLedgerSchema, StoryEngineSchema, FactDeltaSchema } from "./schemas.js";
 import { appendTrace } from "./trace.js";
 import { listStorycraftArtifacts } from "./storycraft.js";
 
@@ -36,8 +36,14 @@ export async function buildContextPacket(projectName: string, chapter: string): 
     `generated_at: ${nowIso()}`,
     ``,
     `This packet intentionally avoids full manuscript ingestion, deep archive, raw trace, and unconfirmed weak guesses.`,
+    `It also follows the narrative mechanism minimal injection principle: executable project state only, no theory dump.`,
     ``,
   ];
+
+  const geneSummary = await narrativeMechanismSummary(root);
+  if (geneSummary.length > 0) {
+    body.push("## Narrative Mechanism Reminders", "", ...geneSummary, "");
+  }
 
   for (const section of sections) {
     body.push(`## ${section.title}`, "");
@@ -56,6 +62,57 @@ export async function buildContextPacket(projectName: string, chapter: string): 
     metadata: { chapter },
   });
   return outputPath;
+}
+
+async function narrativeMechanismSummary(root: string): Promise<string[]> {
+  const output: string[] = [];
+  const storyEnginePath = path.join(root, "10_bible/story_engine.yaml");
+  if (await pathExists(storyEnginePath)) {
+    try {
+      const storyEngine = StoryEngineSchema.parse(await readYaml(storyEnginePath));
+      if (storyEngine.core_emotion.value && storyEngine.core_emotion.status !== "rejected") {
+        output.push(`- 当前核心情绪：${formatValue(storyEngine.core_emotion.value)}（${storyEngine.core_emotion.status}）`);
+      }
+      const activeEngines = storyEngine.story_engines
+        .filter((item) => item.status === "approved_reference" || item.status === "experimental")
+        .slice(0, 3)
+        .map((item) => `${item.name}${item.effective_scope ? ` / ${item.effective_scope}` : ""}`);
+      if (activeEngines.length > 0) output.push(`- 启用中的故事引擎：${activeEngines.join("；")}`);
+      const antiGenes = storyEngine.anti_genes
+        .filter((item) => item.status !== "rejected")
+        .slice(0, 3)
+        .map((item) => item.description);
+      if (antiGenes.length > 0) output.push(`- 叙事禁止项：${antiGenes.join("；")}`);
+      const drift = storyEngine.gene_drift_candidates.slice(-2).map((item) => `${item.from} -> ${item.to}`);
+      if (drift.length > 0) output.push(`- 需要对齐的引擎漂移候选：${drift.join("；")}`);
+    } catch {
+      output.push("- story_engine.yaml 无法解析，已跳过叙事机制摘要。");
+    }
+  }
+
+  const promiseLedgerPath = path.join(root, "30_plot/promise_ledger.yaml");
+  if (await pathExists(promiseLedgerPath)) {
+    try {
+      const ledger = PromiseLedgerSchema.parse(await readYaml(promiseLedgerPath));
+      const relevant = ledger.promises
+        .filter((item) => ["open", "delayed"].includes(item.status) || item.risk === "high")
+        .slice(0, 5)
+        .map((item) => `${item.id}: ${item.reader_expectation}（${item.status}, ${item.obligation_level}, ${item.tension_policy}）`);
+      if (relevant.length > 0) {
+        output.push("- 当前相关期待：");
+        output.push(...relevant.map((item) => `  - ${item}`));
+      }
+    } catch {
+      output.push("- promise_ledger.yaml 无法解析，已跳过读者期待摘要。");
+    }
+  }
+  return output;
+}
+
+function formatValue(value: string | string[] | Record<string, unknown>): string {
+  if (Array.isArray(value)) return value.join("；");
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
 }
 
 async function relativeFiles(root: string, dir: string, suffix: string): Promise<string[]> {

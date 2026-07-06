@@ -3,7 +3,7 @@ import { findPacket, updatePacket } from "./input.js";
 import { ensureDir, readText, writeText, writeYaml } from "./fs-utils.js";
 import { assertSafeId, projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
-import { AuthorInputPacket } from "./schemas.js";
+import { AuthorInputPacket, PromisePatchSchema } from "./schemas.js";
 import { appendTrace } from "./trace.js";
 
 export const INTAKE_FILES = [
@@ -21,6 +21,7 @@ export const INTAKE_FILES = [
 
 export const OPTIONAL_INTAKE_FILES = [
   "chapter_quality_review.md",
+  "promise_ledger_update.yaml",
 ];
 
 export interface IntakeResult {
@@ -65,6 +66,7 @@ Unconfirmed but potentially useful vibes. These are short-term only and cannot e
   await writeYaml(path.join(intakeDir, "memory_patch.yaml"), buildMemoryPatch(packet, rawText));
   await writeText(path.join(intakeDir, "alignment_questions.md"), buildAlignmentQuestions(packet));
   await writeText(path.join(intakeDir, "chapter_quality_review.md"), buildChapterQualityReview(packet, rawText));
+  await writeYaml(path.join(intakeDir, "promise_ledger_update.yaml"), buildPromiseLedgerUpdate(packet, rawText));
 
   const nextPacket: AuthorInputPacket = {
     ...packet,
@@ -75,6 +77,7 @@ Unconfirmed but potentially useful vibes. These are short-term only and cannot e
       "review_intention_hypotheses",
       "approve_or_reject_memory_patch",
       "review_chapter_quality",
+      "review_promise_ledger_update",
     ],
   };
   await updatePacket(projectName, nextPacket, "processed");
@@ -83,7 +86,10 @@ Unconfirmed but potentially useful vibes. These are short-term only and cannot e
     input_id: inputId,
     from_status: packet.status,
     to_status: "pending_confirmation",
-    artifacts: INTAKE_FILES.map((file) => `01_intake/${inputId}/${file}`).concat(`01_intake/${inputId}/chapter_quality_review.md`),
+    artifacts: INTAKE_FILES.map((file) => `01_intake/${inputId}/${file}`).concat([
+      `01_intake/${inputId}/chapter_quality_review.md`,
+      `01_intake/${inputId}/promise_ledger_update.yaml`,
+    ]),
     metadata: { hypothesis_ids: ["vibe_a", "vibe_b", "vibe_c"] },
   });
 
@@ -395,6 +401,84 @@ function buildMemoryPatch(packet: AuthorInputPacket, rawText: string): unknown {
   };
 }
 
+function buildPromiseLedgerUpdate(packet: AuthorInputPacket, rawText: string): unknown {
+  const chapter = packet.target_scope.chapter ?? "unknown_chapter";
+  const units = proseUnits(rawText);
+  const hooks = buildHooksOpened(units);
+  const relationEvidence = units.find((unit) => /别死|伞|偏了半寸|没有回头|抓住|推开|低头/.test(unit));
+  const mysteryEvidence = units.find((unit) => /名字|债名|黑钟|残页|旧案|真相|秘密|龙/.test(unit));
+  const firstEvidence = relationEvidence ?? mysteryEvidence ?? hooks[0] ?? compactText(units[0] ?? packet.raw_text_excerpt);
+  const safeChapter = safeLocalId(chapter);
+  const operations = [];
+
+  if (hooks.length > 0 || relationEvidence || mysteryEvidence) {
+    const type = relationEvidence ? "relationship" : mysteryEvidence ? "mystery" : "other";
+    operations.push({
+      op: "add_candidate",
+      promise: {
+        id: `promise_${safeChapter}_${safeLocalId(packet.input_id)}_001`,
+        type,
+        origin: "text_explicit",
+        confidence: 0.72,
+        obligation_level: "soft",
+        source_chapter: chapter,
+        reader_expectation: relationEvidence
+          ? "关系中的默认立场或信任边界发生了轻微变化，需要后续用行动回响。"
+          : "文本打开了一个需要阶段性回应的信息问题。",
+        author_intended_strategy: null,
+        tension_policy: "allow_delay",
+        status: "open",
+        suggested_payoff_window: nextWindow(chapter, 5, 20),
+        last_touched_chapter: chapter,
+        payoff_mode: null,
+        payoff_quality: "unknown",
+        risk: "medium",
+        source_refs: [{ file: packet.raw_source_path, quote: compactText(firstEvidence) }],
+        updated_at: nowIso(),
+      },
+      evidence: [compactText(firstEvidence)],
+      origin: "text_explicit",
+      confidence: 0.72,
+      requires_human_approval: true,
+    });
+  } else {
+    operations.push({
+      op: "add_candidate",
+      promise: {
+        id: `promise_${safeChapter}_${safeLocalId(packet.input_id)}_weak_001`,
+        type: "other",
+        origin: "ai_inference",
+        confidence: 0.42,
+        obligation_level: "speculative",
+        source_chapter: chapter,
+        reader_expectation: "系统弱推断本章可能留下了短期追问，但需要作者确认是否真的构成读者期待。",
+        author_intended_strategy: null,
+        tension_policy: "keep_ambiguous",
+        status: "open",
+        suggested_payoff_window: null,
+        last_touched_chapter: chapter,
+        payoff_mode: null,
+        payoff_quality: "unknown",
+        risk: "unknown",
+        source_refs: [{ file: packet.raw_source_path, quote: compactText(firstEvidence) }],
+        updated_at: nowIso(),
+      },
+      evidence: [compactText(firstEvidence)],
+      origin: "ai_inference",
+      confidence: 0.42,
+      requires_human_approval: true,
+    });
+  }
+
+  return PromisePatchSchema.parse({
+    patch_id: `promise_patch_${safeLocalId(packet.input_id)}_001`,
+    source_input: packet.input_id,
+    requires_human_approval: true,
+    created_at: nowIso(),
+    operations,
+  });
+}
+
 function buildAlignmentQuestions(packet: AuthorInputPacket): string {
   return `# Alignment Questions - ${packet.input_id}
 
@@ -470,6 +554,15 @@ ${dimensions.map((item) => `| ${item.label} | ${item.score.toFixed(1)} | ${item.
 - chapter_end_hook: ${risks.chapterEndHook ? quoteEvidence(tail.slice(-160) || tail) : "weak_or_missing"}
 - long_hook_candidates:
 ${longHookCandidates(chapterText).map((item) => `  - ${item}`).join("\n") || "  - none"}
+- hook_risks:
+${hookRisks(chapterText, tail, risks).map((item) => `  - type: ${item.type}; confidence: ${item.confidence.toFixed(2)}; requires_author_confirmation: true; evidence: ${quoteEvidence(item.evidence)}`).join("\n") || "  - none"}
+
+## Serial Mechanism Audit
+
+- state_changed: ${risks.payoff || risks.action || risks.curiosity ? "likely" : "unclear"}
+- promise_activity: ${risks.chapterEndHook ? "opened_or_touched" : risks.payoff ? "paid_or_partially_paid" : "unclear"}
+- core_emotion_drift: candidate_only，需要结合 story_engine.yaml 和最近章节对齐，不作为写错判断。
+- ambiguity_guard: ${/留白|不要解释|不要说破|不解释/.test(chapterText) ? "intentional_ambiguity_possible" : "not_detected"}
 
 ## Reader Emotion Curve
 
@@ -494,6 +587,7 @@ ${optional.length > 0 ? optional.map((item) => `  - ${item}`).join("\n") : "  - 
 author_questions:
   - 本章最想让读者追问的问题是否就是当前章末钩子？
   - 主角本章的小胜和代价是否符合你的真实意图？
+  - hook_risks 中的弱钩子判断，是伪钩子，还是你有意保留余味/留白？
 `;
 }
 
@@ -696,6 +790,30 @@ function longHookCandidates(chapterText: string): string[] {
   return found.map((keyword) => `${keyword} 相关长线问题`);
 }
 
+function hookRisks(
+  chapterText: string,
+  tail: string,
+  risks: ReturnType<typeof collectTextSignals>,
+): Array<{ type: string; confidence: number; evidence: string }> {
+  const output: Array<{ type: string; confidence: number; evidence: string }> = [];
+  if (/留白|不要解释|不要说破|不解释|暂不解释/.test(chapterText)) {
+    output.push({ type: "intentional_ambiguity", confidence: 0.74, evidence: tail || chapterText.slice(0, 160) });
+  }
+  if (!risks.chapterEndHook && risks.humanTextureEvidence.length > 0) {
+    output.push({ type: "low_immediate_pull", confidence: 0.58, evidence: risks.humanTextureEvidence[0] });
+  }
+  if (risks.chapterEndHook && /更大的危机即将来临|一切才刚刚开始|命运的齿轮/.test(tail)) {
+    output.push({ type: "fake_hook", confidence: 0.67, evidence: tail });
+  }
+  if (risks.payoff && !risks.cost) {
+    output.push({ type: "weak_payoff", confidence: 0.62, evidence: risks.payoffEvidence[0] ?? tail });
+  }
+  if (risks.infoLoadRisk) {
+    output.push({ type: "over_explained", confidence: 0.66, evidence: chapterText.slice(0, 180) });
+  }
+  return output;
+}
+
 function evidenceForKeywords(chapterText: string, keywords: string[]): string[] {
   const unique = [...new Set(keywords)].slice(0, 4);
   const lines = proseUnits(chapterText);
@@ -707,6 +825,18 @@ function evidenceForKeywords(chapterText: string, keywords: string[]): string[] 
 
 function score(base: number, ...deltas: number[]): number {
   return roundScore(Math.max(1, Math.min(5, base + deltas.reduce((sum, value) => sum + value, 0))));
+}
+
+function safeLocalId(value: string): string {
+  const cleaned = value.replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
+  return cleaned || "unknown";
+}
+
+function nextWindow(chapter: string, minOffset: number, maxOffset: number): string | null {
+  const match = chapter.match(/^ch[_-]?(\d+)$/i);
+  if (!match) return null;
+  const current = Number(match[1]);
+  return `ch${String(current + minOffset).padStart(4, "0")}-ch${String(current + maxOffset).padStart(4, "0")}`;
 }
 
 function roundScore(value: number): number {

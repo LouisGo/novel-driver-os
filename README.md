@@ -207,6 +207,8 @@ novel storycraft premise create black_tower --source-input <inputId> --from-file
 novel storycraft payoff create black_tower --from-file ./payoff.md --chapter ch0001 --json
 novel storycraft emotion create black_tower --from-file ./curve.md --chapter ch0002 --json
 novel storycraft brief create black_tower --from-file ./brief.md --chapter ch0003 --json
+novel storycraft gene create black_tower --from-file ./gene.md --json
+novel storycraft serial_plan create black_tower --from-file ./serial.md --json
 novel storycraft brief list black_tower --json
 novel storycraft brief show black_tower <artifactId> --json
 ```
@@ -215,9 +217,29 @@ novel storycraft brief show black_tower <artifactId> --json
 - `payoff`：承诺、铺垫、延迟、兑现、代价和后果。
 - `emotion`：压力、蓄势、兑现、缓冲、余波和转向。
 - `brief`：下一章作战简报，可作为生成章节或 variant 的输入。
+- `gene`：叙事机制、类型承诺、故事引擎和人物引擎报告。
+- `serial_plan`：卷级、小循环和期待兑现节奏计划。
 - `status --json` 会返回 `storycraft_artifacts`，`context build` 会纳入最近 storycraft 内容。
 
 面向作者或 GUI 时，以上内部分类应显示为：创作方向、爽点设计、情绪节奏、章节作战简报。`--json` 仍保留机器字段，详见 `docs/author-facing-language.md`。
+
+## Narrative Mechanism Layer
+
+叙事机制提醒层把“网文理论”拆成项目状态、读者期待账本和复盘提醒，而不是固定 prompt。它只提醒和记账，不自动改正史。
+
+```bash
+novel migrate webnovel-gene black_tower --json
+novel gene show black_tower --json
+novel gene approve black_tower --path core_emotion --json
+novel promise report black_tower --json
+novel promise apply-patch black_tower <inputId> --json
+novel promise pay black_tower <promiseId> --mode emotional_echo --quality expected --json
+```
+
+- `10_bible/story_engine.yaml`：字段级状态的项目叙事机制参考，不等于 canon。
+- `30_plot/promise_ledger.yaml`：作者确认或允许长期参考的读者期待账本。
+- `01_intake/<inputId>/promise_ledger_update.yaml`：章节 intake 生成的候选 patch，不会直接更新账本。
+- `context build` 只注入当前任务可执行摘要，不注入完整理论或经典作品分析。
 
 ## Book Profile
 

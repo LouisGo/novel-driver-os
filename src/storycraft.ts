@@ -165,5 +165,11 @@ function nextCommandsFor(projectName: string, kind: StorycraftKind, artifactId: 
   if (kind === "emotion") {
     return [`novel storycraft brief create ${projectName} --from-file <brief-file> --chapter ${options.chapter ?? "<chapter>"} --label <label>`];
   }
+  if (kind === "gene") {
+    return [`novel gene approve ${projectName} --path <fieldPath>`];
+  }
+  if (kind === "serial_plan") {
+    return [`novel promise report ${projectName}`];
+  }
   return [`novel context build ${projectName} --chapter ${options.chapter ?? "<chapter>"}`];
 }

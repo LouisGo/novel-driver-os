@@ -24,8 +24,10 @@ import { createSnapshot, restoreSnapshot } from "./snapshot.js";
 import { initProjectGit } from "./project-git.js";
 import { setBookProfile, showBookProfile } from "./book.js";
 import { createStorycraftArtifact, listStorycraftArtifacts, readStorycraftArtifact } from "./storycraft.js";
-import { StorycraftKind, StorycraftKindSchema } from "./schemas.js";
+import { GeneFieldStatusSchema, StorycraftKind, StorycraftKindSchema } from "./schemas.js";
 import { inputStatusLabel, inputTypeLabel, storycraftKindLabel } from "./display.js";
+import { migrateWebnovelGene, showGeneLayer, updateGeneFieldStatus } from "./gene.js";
+import { applyPromisePatch, confirmPromise, dropPromise, payPromise, promiseReport, transformPromise } from "./promise.js";
 
 const program = new Command();
 
@@ -41,6 +43,70 @@ program
   .action(wrap(async (projectName: string) => {
     const root = await initProject(projectName);
     console.log(`Initialized project: ${path.relative(process.cwd(), root)}`);
+  }));
+
+const migrate = program.command("migrate").description("Project migration commands.");
+
+migrate
+  .command("webnovel-gene")
+  .argument("<projectName>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Create missing narrative mechanism reminder layer files without overwriting existing project data.")
+  .action(wrap(async (projectName: string, options: { json?: boolean }) => {
+    const result = await migrateWebnovelGene(projectName);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`叙事机制迁移完成，新增 ${result.changed_files.length} 项。`);
+  }));
+
+const gene = program.command("gene").description("Narrative mechanism reminder layer commands.");
+
+gene
+  .command("show")
+  .argument("<projectName>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Show story engine and promise ledger summaries.")
+  .action(wrap(async (projectName: string, options: { json?: boolean }) => {
+    const result = await showGeneLayer(projectName);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(YAMLish(result));
+  }));
+
+gene
+  .command("approve")
+  .argument("<projectName>")
+  .requiredOption("--path <fieldPath>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Mark one story_engine field as approved_reference.")
+  .action(wrap(async (projectName: string, options: { path: string; json?: boolean }) => {
+    const result = await updateGeneFieldStatus(projectName, options.path, "approved_reference", null);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`已确认叙事机制字段：${options.path}`);
+  }));
+
+gene
+  .command("reject")
+  .argument("<projectName>")
+  .requiredOption("--path <fieldPath>")
+  .requiredOption("--reason <text>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Reject one story_engine field without deleting its evidence.")
+  .action(wrap(async (projectName: string, options: { path: string; reason: string; json?: boolean }) => {
+    GeneFieldStatusSchema.parse("rejected");
+    const result = await updateGeneFieldStatus(projectName, options.path, "rejected", options.reason);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`已驳回叙事机制字段：${options.path}`);
   }));
 
 program
@@ -478,6 +544,102 @@ debt
     console.log(`Added retcon debt for ${options.chapter}`);
   }));
 
+const promise = program.command("promise").description("Reader expectation ledger commands.");
+
+promise
+  .command("report")
+  .argument("<projectName>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Show open, delayed and paid reader expectations.")
+  .action(wrap(async (projectName: string, options: { json?: boolean }) => {
+    const result = await promiseReport(projectName);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(JSON.stringify(result.summary, null, 2));
+  }));
+
+promise
+  .command("apply-patch")
+  .argument("<projectName>")
+  .argument("<inputId>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Apply an approved promise ledger update from chapter intake.")
+  .action(wrap(async (projectName: string, inputId: string, options: { json?: boolean }) => {
+    const result = await applyPromisePatch(projectName, inputId);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`已更新期待账本：${result.changed_files.join(", ")}`);
+    if (result.skipped.length > 0) console.log(`skipped: ${result.skipped.join(", ")}`);
+  }));
+
+promise
+  .command("confirm")
+  .argument("<projectName>")
+  .argument("<promiseId>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Confirm a promise already present in the ledger.")
+  .action(wrap(async (projectName: string, promiseId: string, options: { json?: boolean }) => {
+    const result = await confirmPromise(projectName, promiseId);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`已确认期待：${promiseId}`);
+  }));
+
+promise
+  .command("pay")
+  .argument("<projectName>")
+  .argument("<promiseId>")
+  .requiredOption("--mode <payoffMode>")
+  .requiredOption("--quality <quality>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Mark a promise as paid with a specific payoff mode and quality.")
+  .action(wrap(async (projectName: string, promiseId: string, options: { mode: string; quality: string; json?: boolean }) => {
+    const result = await payPromise(projectName, promiseId, options.mode, options.quality);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`已兑现期待：${promiseId}`);
+  }));
+
+promise
+  .command("transform")
+  .argument("<projectName>")
+  .argument("<promiseId>")
+  .requiredOption("--into <newPromiseId>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Mark a promise as transformed into another expectation.")
+  .action(wrap(async (projectName: string, promiseId: string, options: { into: string; json?: boolean }) => {
+    const result = await transformPromise(projectName, promiseId, options.into);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`已变形期待：${promiseId} -> ${options.into}`);
+  }));
+
+promise
+  .command("drop")
+  .argument("<projectName>")
+  .argument("<promiseId>")
+  .requiredOption("--reason <text>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Mark a promise as intentionally abandoned by the author.")
+  .action(wrap(async (projectName: string, promiseId: string, options: { reason: string; json?: boolean }) => {
+    const result = await dropPromise(projectName, promiseId, options.reason);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`已放弃期待：${promiseId}`);
+  }));
+
 debt
   .command("report")
   .argument("<projectName>")
@@ -511,7 +673,7 @@ style
 
 const storycraft = program.command("storycraft").description("Commercial storycraft artifact commands.");
 
-for (const kind of ["premise", "payoff", "emotion", "brief"] as StorycraftKind[]) {
+for (const kind of ["premise", "payoff", "emotion", "brief", "gene", "serial_plan"] as StorycraftKind[]) {
   const command = storycraft.command(kind).description(`${kind} storycraft artifacts.`);
 
   command
@@ -801,6 +963,10 @@ function wrap<T extends unknown[]>(fn: (...args: T) => Promise<void>): (...args:
 
 function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
+}
+
+function YAMLish(value: unknown): string {
+  return JSON.stringify(value, null, 2);
 }
 
 async function readStdin(): Promise<string> {

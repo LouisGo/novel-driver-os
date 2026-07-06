@@ -3,7 +3,7 @@ import { listFilesRecursive, pathExists, readText, readYaml, writeText } from ".
 import { listInputs } from "./input.js";
 import { projectRoot } from "./paths.js";
 import { localDate, nowIso } from "./time.js";
-import { AuthorInputPacket, IntentionHypothesesFileSchema } from "./schemas.js";
+import { AuthorInputPacket, IntentionHypothesesFileSchema, PromiseLedgerSchema, StoryEngineSchema } from "./schemas.js";
 import { appendTrace } from "./trace.js";
 
 export async function weeklyAlignment(projectName: string): Promise<string> {
@@ -12,6 +12,7 @@ export async function weeklyAlignment(projectName: string): Promise<string> {
   const counts = countInputs(packets);
   const uncertainties = await collectUncertainties(root);
   const styleObservation = await collectStyleObservation(root);
+  const serialReview = await collectSerialReview(root);
   const date = localDate();
   const reportPath = path.join(root, "60_alignment/weekly_reports", `${date}_alignment_report.md`);
 
@@ -42,6 +43,8 @@ ${styleObservation}
 
 ## 5. 下周建议
 
+${serialReview}
+
 - 更克制
 - 更爽
 - 更悬疑
@@ -59,6 +62,62 @@ ${styleObservation}
     metadata: { input_counts: counts },
   });
   return reportPath;
+}
+
+async function collectSerialReview(root: string): Promise<string> {
+  const risks: string[] = [];
+  const uncertain: string[] = [];
+  const decisions: string[] = [];
+  const observe: string[] = [];
+
+  const promiseLedgerPath = path.join(root, "30_plot/promise_ledger.yaml");
+  if (await pathExists(promiseLedgerPath)) {
+    try {
+      const ledger = PromiseLedgerSchema.parse(await readYaml(promiseLedgerPath));
+      const delayed = ledger.promises.filter((item) => item.status === "delayed");
+      const highRisk = ledger.promises.filter((item) => item.risk === "high");
+      if (highRisk[0]) risks.push(`${highRisk[0].id}: ${highRisk[0].reader_expectation}`);
+      if (!highRisk[0] && delayed[0]) risks.push(`${delayed[0].id}: 期待已延迟，需要确认是允许延迟还是需要阶段性回应。`);
+      for (const item of ledger.promises.filter((promise) => promise.origin === "reader_likely" || promise.origin === "ai_inference").slice(0, 2)) {
+        uncertain.push(`${item.id}: ${item.reader_expectation}`);
+      }
+    } catch {
+      uncertain.push("promise_ledger.yaml 无法解析，暂不能复盘期待账本。");
+    }
+  } else {
+    observe.push("尚未启用 promise_ledger.yaml，可运行 novel migrate webnovel-gene。");
+  }
+
+  const storyEnginePath = path.join(root, "10_bible/story_engine.yaml");
+  if (await pathExists(storyEnginePath)) {
+    try {
+      const storyEngine = StoryEngineSchema.parse(await readYaml(storyEnginePath));
+      for (const drift of storyEngine.gene_drift_candidates.slice(-2)) {
+        decisions.push(`是否接受引擎漂移：${drift.from} -> ${drift.to}`);
+      }
+      if (!storyEngine.core_emotion.value) {
+        decisions.push("是否需要确认本书当前核心情绪？");
+      }
+    } catch {
+      uncertain.push("story_engine.yaml 无法解析，暂不能判断核心情绪和引擎漂移。");
+    }
+  } else {
+    observe.push("尚未启用 story_engine.yaml，可运行 novel migrate webnovel-gene。");
+  }
+
+  return `## 连载工程复盘
+
+本周最大风险：
+${formatTop(risks.slice(0, 1), "暂无明确最大风险。")}
+
+系统最不确定的问题：
+${formatTop(uncertain.slice(0, 2), "暂无高优先级不确定问题。")}
+
+需要作者定调：
+${formatTop(decisions.slice(0, 3), "暂无必须定调项。")}
+
+暂时观察：
+${formatTop(observe, "暂无观察项。")}`;
 }
 
 function countInputs(packets: AuthorInputPacket[]): Record<string, number> {

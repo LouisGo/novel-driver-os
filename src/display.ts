@@ -36,6 +36,8 @@ export const storycraftKindLabels: Record<StorycraftKind, string> = {
   payoff: "爽点设计",
   emotion: "情绪节奏",
   brief: "章节作战简报",
+  gene: "叙事机制",
+  serial_plan: "连载计划",
 };
 
 export function inputTypeLabel(type: InputType | string): string {

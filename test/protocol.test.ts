@@ -24,6 +24,8 @@ import { createSnapshot, restoreSnapshot } from "../src/snapshot.js";
 import { getSessionStatus, pauseSession, resumeSession } from "../src/session.js";
 import { setBookProfile } from "../src/book.js";
 import { createStorycraftArtifact, listStorycraftArtifacts, readStorycraftArtifact } from "../src/storycraft.js";
+import { migrateWebnovelGene } from "../src/gene.js";
+import { applyPromisePatch, promiseReport } from "../src/promise.js";
 
 test("validator rejects intention and retcon debt protocol violations", { concurrency: false }, async () => {
   await withProject(async (root) => {
@@ -108,7 +110,44 @@ test("chapter intake writes a chapter quality review", { concurrency: false }, a
     assert.match(review, /decision:\s*(pass|minor_revision|major_revision|rewrite)/);
     assert.match(review, /## Scorecard/);
     assert.match(review, /主角锚定/);
+    assert.match(review, /## Serial Mechanism Audit/);
+    assert.match(review, /hook_risks:/);
     assert.doesNotMatch(review, /chapter_end_hook: weak_or_missing/);
+
+    const promisePatchPath = path.join(root, "projects/black_tower/01_intake", packet.input_id, "promise_ledger_update.yaml");
+    const promisePatch = YAML.parse(await fs.readFile(promisePatchPath, "utf8"));
+    assert.equal(promisePatch.requires_human_approval, true);
+    assert.equal(promisePatch.operations[0].requires_human_approval, true);
+
+    const ledgerBefore = await fs.readFile(path.join(root, "projects/black_tower/30_plot/promise_ledger.yaml"), "utf8");
+    assert.doesNotMatch(ledgerBefore, /你最好别死|默认立场/);
+
+    const result = await validateProject("black_tower");
+    assert.equal(result.ok, true, result.errors.join("\n"));
+  });
+});
+
+test("webnovel gene layer initializes, migrates idempotently and warns on old projects", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const projectRoot = path.join(root, "projects/black_tower");
+    assert.match(await fs.readFile(path.join(projectRoot, "10_bible/story_engine.yaml"), "utf8"), /core_emotion/);
+    assert.match(await fs.readFile(path.join(projectRoot, "30_plot/promise_ledger.yaml"), "utf8"), /promises/);
+
+    await fs.rm(path.join(projectRoot, "10_bible/story_engine.yaml"));
+    await fs.rm(path.join(projectRoot, "30_plot/promise_ledger.yaml"));
+    await fs.rm(path.join(projectRoot, "35_storycraft/gene"), { recursive: true, force: true });
+    await fs.rm(path.join(projectRoot, "35_storycraft/serial_plan"), { recursive: true, force: true });
+
+    const oldProjectValidation = await validateProject("black_tower");
+    assert.equal(oldProjectValidation.ok, true, oldProjectValidation.errors.join("\n"));
+    assert(oldProjectValidation.warnings.some((warning) => warning.includes("story_engine.yaml")));
+
+    const migrated = await migrateWebnovelGene("black_tower");
+    assert(migrated.changed_files.includes("10_bible/story_engine.yaml"));
+    assert(migrated.changed_files.includes("30_plot/promise_ledger.yaml"));
+
+    const again = await migrateWebnovelGene("black_tower");
+    assert.equal(again.changed_files.length, 0);
 
     const result = await validateProject("black_tower");
     assert.equal(result.ok, true, result.errors.join("\n"));
@@ -153,6 +192,32 @@ test("creative input loop routes, reviews, applies and exposes GUI status", { co
     assert(trace.some((event) => event.command === "review.decide"));
     assert(trace.some((event) => event.command === "snapshot.create"));
     assert(trace.some((event) => event.command === "patch.apply"));
+  });
+});
+
+test("promise patch applies only safe candidates and never updates ledger during intake", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const packet = await ingestChapter(root);
+    await createChapterIntake("black_tower", packet.input_id);
+
+    const before = await promiseReport("black_tower");
+    assert.equal(before.promises.length, 0);
+
+    const applied = await applyPromisePatch("black_tower", packet.input_id);
+    assert.equal(applied.changed_files.includes("30_plot/promise_ledger.yaml"), true);
+
+    const after = await promiseReport("black_tower");
+    assert.equal(after.promises.length, 1);
+    assert.equal(after.promises[0].origin, "text_explicit");
+    assert.notEqual(after.promises[0].obligation_level, "speculative");
+
+    const weakPacket = await ingestChapter(root, "quiet.md", "#black_tower #正文 #ch51 #正稿\n他坐了一会儿。\n\n屋里很安静。\n");
+    await createChapterIntake("black_tower", weakPacket.input_id);
+    const weakApplied = await applyPromisePatch("black_tower", weakPacket.input_id);
+    assert(weakApplied.skipped.some((item) => item.includes("low_confidence_ai_inference")));
+
+    const finalReport = await promiseReport("black_tower");
+    assert.equal(finalReport.promises.length, 1);
   });
 });
 
@@ -405,6 +470,34 @@ test("storycraft artifacts are registered, listed, validated and exposed to GUI 
     const sourceOnlyContent = (await readStorycraftArtifact("black_tower", "payoff", sourceOnly.artifact.artifact_id)).content;
     assert.match(sourceOnlyContent, /原始输入/);
     assert.doesNotMatch(sourceOnlyContent, /Source Input/);
+
+    const canonBefore = await fs.readFile(path.join(root, "projects/black_tower/10_bible/canon_registry.md"), "utf8");
+    const engineBefore = await fs.readFile(path.join(root, "projects/black_tower/10_bible/story_engine.yaml"), "utf8");
+    const ledgerBefore = await fs.readFile(path.join(root, "projects/black_tower/30_plot/promise_ledger.yaml"), "utf8");
+    const geneReportPath = path.join(root, "gene-report.md");
+    await fs.writeFile(geneReportPath, "核心情绪候选：被抹去的人重新被看见。\n", "utf8");
+    const gene = await createStorycraftArtifact("black_tower", "gene", {
+      fromFile: geneReportPath,
+      sourceInput: packet.input_id,
+      label: "核心情绪候选",
+    });
+    assert.equal(gene.artifact.kind, "gene");
+    const serial = await createStorycraftArtifact("black_tower", "serial_plan", {
+      stdinText: "第一卷先打开身份谜团，再做一次情绪回响。",
+      label: "第一卷期待节奏",
+    });
+    assert.equal(serial.artifact.kind, "serial_plan");
+    assert.equal(await fs.readFile(path.join(root, "projects/black_tower/10_bible/canon_registry.md"), "utf8"), canonBefore);
+    assert.equal(await fs.readFile(path.join(root, "projects/black_tower/10_bible/story_engine.yaml"), "utf8"), engineBefore);
+    assert.equal(await fs.readFile(path.join(root, "projects/black_tower/30_plot/promise_ledger.yaml"), "utf8"), ledgerBefore);
+
+    const engine = YAML.parse(engineBefore);
+    engine.core_emotion.value = "被抹去的人重新被看见";
+    engine.core_emotion.status = "approved_reference";
+    await fs.writeFile(path.join(root, "projects/black_tower/10_bible/story_engine.yaml"), YAML.stringify(engine), "utf8");
+    const geneContext = await fs.readFile(await buildContextPacket("black_tower", "ch0002"), "utf8");
+    assert.match(geneContext, /Narrative Mechanism Reminders/);
+    assert.doesNotMatch(geneContext, /经典中文网文|经典网文的核心|webnovel-gene-protocol/);
 
     const result = await validateProject("black_tower");
     assert.equal(result.ok, true, result.errors.join("\n"));

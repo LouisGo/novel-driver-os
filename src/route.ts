@@ -182,14 +182,14 @@ function routeFor(type: InputType): { primary: string; secondary: string[]; bloc
 
 function commandsFor(projectName: string, inputId: string, type: InputType): string[] {
   const commands: Record<InputType, string[]> = {
-    inspiration: [`agent: use novel-premise-alchemy for ${projectName} ${inputId}`, `novel storycraft premise create ${projectName} --source-input ${inputId} --from-file <premise-report>`],
+    inspiration: [`agent: use novel-premise-alchemy for ${projectName} ${inputId}`, `novel storycraft premise create ${projectName} --source-input ${inputId} --from-file <premise-report>`, `novel storycraft gene create ${projectName} --source-input ${inputId} --from-file <gene-report>`],
     chapter: [`novel intake chapter ${projectName} ${inputId}`],
     fragment: [`novel intake chapter ${projectName} ${inputId}`],
-    book_profile: [`agent: use novel-premise-alchemy for ${projectName} ${inputId}`, `novel storycraft premise create ${projectName} --source-input ${inputId} --from-file <premise-report>`, `novel book set ${projectName} --source-input ${inputId} --title <title> --synopsis <synopsis>`],
-    outline: [`agent: use novel-emotion-curve for ${projectName} ${inputId}`, `novel storycraft emotion create ${projectName} --source-input ${inputId} --from-file <emotion-report>`, `novel propose ${projectName} ${inputId} --kind outline`],
+    book_profile: [`agent: use novel-premise-alchemy for ${projectName} ${inputId}`, `novel storycraft premise create ${projectName} --source-input ${inputId} --from-file <premise-report>`, `novel storycraft gene create ${projectName} --source-input ${inputId} --from-file <gene-report>`, `novel book set ${projectName} --source-input ${inputId} --title <title> --synopsis <synopsis>`],
+    outline: [`agent: use novel-emotion-curve for ${projectName} ${inputId}`, `novel storycraft emotion create ${projectName} --source-input ${inputId} --from-file <emotion-report>`, `novel storycraft serial_plan create ${projectName} --source-input ${inputId} --from-file <serial-plan-report>`, `novel propose ${projectName} ${inputId} --kind outline`],
     setting: [`novel propose ${projectName} ${inputId} --kind setting`],
     character: [`novel propose ${projectName} ${inputId} --kind character`],
-    worldbuilding: [`agent: use novel-world-contract-builder for ${projectName} ${inputId}`, `novel propose ${projectName} ${inputId} --kind worldbuilding`],
+    worldbuilding: [`agent: use novel-world-contract-builder for ${projectName} ${inputId}`, `agent: world contract must cover resources, hierarchy, rules, taboos and secrets`, `novel storycraft gene create ${projectName} --source-input ${inputId} --from-file <gene-report>`, `novel propose ${projectName} ${inputId} --kind worldbuilding`],
     ambiguity: [`novel propose ${projectName} ${inputId} --kind ambiguity`],
     style_feedback: [`novel style candidate ${projectName} ${inputId}`],
     learning_sample: [`agent: use novel-exemplar-learning for ${projectName} ${inputId}`],

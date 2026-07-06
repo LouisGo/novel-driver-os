@@ -10,21 +10,26 @@ import {
   InputStatusSchema,
   IntentionHypothesesFileSchema,
   ProjectSchema,
+  PromiseLedgerSchema,
+  PromisePatchSchema,
   RetconDebtSchema,
+  StoryEngineSchema,
   StorycraftManifestSchema,
 } from "./schemas.js";
 
 export interface ValidationResult {
   ok: boolean;
   errors: string[];
+  warnings: string[];
 }
 
 export async function validateProject(projectName: string): Promise<ValidationResult> {
   const root = projectRoot(projectName);
   const errors: string[] = [];
+  const warnings: string[] = [];
 
   if (!(await pathExists(root))) {
-    return { ok: false, errors: [`Project not found: ${projectName}`] };
+    return { ok: false, errors: [`Project not found: ${projectName}`], warnings: [] };
   }
 
   for (const dir of REQUIRED_PROJECT_DIRS) {
@@ -37,6 +42,7 @@ export async function validateProject(projectName: string): Promise<ValidationRe
   await validateYamlFile(path.join(root, "project.yaml"), ProjectSchema.parse, errors);
   await validateYamlFile(path.join(root, "70_debt/retcon_debt.yaml"), RetconDebtSchema.parse, errors);
   await validateBookProfile(root, path.join(root, "10_bible/book_profile.yaml"), errors);
+  await validateWebnovelGeneLayer(root, errors, warnings);
   await validateChapterIndex(root, path.join(root, "50_chapters/chapter_index.yaml"), errors);
   await validateSessionLedger(root, path.join(root, "session.yaml"), errors);
 
@@ -130,7 +136,7 @@ export async function validateProject(projectName: string): Promise<ValidationRe
 
   await validateTraceFile(root, path.join(root, "trace.jsonl"), errors);
 
-  return { ok: errors.length === 0, errors };
+  return { ok: errors.length === 0, errors, warnings };
 }
 
 async function validateBookProfile(root: string, filePath: string, errors: string[]): Promise<void> {
@@ -146,8 +152,9 @@ async function validateBookProfile(root: string, filePath: string, errors: strin
 }
 
 export function formatValidation(result: ValidationResult): string {
-  if (result.ok) return "VALID: project file protocol passed.";
-  return ["INVALID: project file protocol failed.", "", ...result.errors.map((error) => `- ${error}`)].join("\n");
+  const warnings = result.warnings.length > 0 ? ["", "WARNINGS:", ...result.warnings.map((warning) => `- ${warning}`)] : [];
+  if (result.ok) return ["VALID: project file protocol passed.", ...warnings].join("\n");
+  return ["INVALID: project file protocol failed.", "", ...result.errors.map((error) => `- ${error}`), ...warnings].join("\n");
 }
 
 async function listIntakeDirs(root: string): Promise<string[]> {
@@ -274,6 +281,33 @@ async function validateOptionalIntakeFiles(root: string, dir: string, errors: st
     if (!(await pathExists(filePath))) continue;
     const text = await readText(filePath);
     if (file === "chapter_quality_review.md") validateChapterQualityReview(root, filePath, text, errors);
+    if (file === "promise_ledger_update.yaml") await validateYamlFile(filePath, PromisePatchSchema.parse, errors);
+  }
+}
+
+async function validateWebnovelGeneLayer(root: string, errors: string[], warnings: string[]): Promise<void> {
+  const storyEngine = path.join(root, "10_bible/story_engine.yaml");
+  const promiseLedger = path.join(root, "30_plot/promise_ledger.yaml");
+  const geneDir = path.join(root, "35_storycraft/gene");
+  const serialPlanDir = path.join(root, "35_storycraft/serial_plan");
+
+  if (await pathExists(storyEngine)) {
+    await validateYamlFile(storyEngine, StoryEngineSchema.parse, errors);
+  } else {
+    warnings.push("Missing optional narrative mechanism file: 10_bible/story_engine.yaml. Run `novel migrate webnovel-gene <project>`.");
+  }
+
+  if (await pathExists(promiseLedger)) {
+    await validateYamlFile(promiseLedger, PromiseLedgerSchema.parse, errors);
+  } else {
+    warnings.push("Missing optional promise ledger: 30_plot/promise_ledger.yaml. Run `novel migrate webnovel-gene <project>`.");
+  }
+
+  if (!(await pathExists(geneDir))) {
+    warnings.push("Missing optional storycraft directory: 35_storycraft/gene.");
+  }
+  if (!(await pathExists(serialPlanDir))) {
+    warnings.push("Missing optional storycraft directory: 35_storycraft/serial_plan.");
   }
 }
 

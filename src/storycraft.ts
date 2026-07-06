@@ -5,6 +5,7 @@ import { compactTimestamp, nowIso } from "./time.js";
 import { appendTrace } from "./trace.js";
 import { findPacket } from "./input.js";
 import { StorycraftKind, StorycraftManifest, StorycraftManifestSchema } from "./schemas.js";
+import { storycraftKindLabel } from "./display.js";
 
 export interface CreateStorycraftOptions {
   fromFile?: string;
@@ -123,7 +124,7 @@ async function storycraftContent(projectName: string, options: CreateStorycraftO
   if (options.sourceInput) {
     const { packet } = await findPacket(projectName, options.sourceInput);
     const rawText = await readText(path.join(projectRoot(projectName), packet.raw_source_path));
-    return `# Source Input ${packet.input_id}\n\n${rawText}`;
+    return `# 原始输入 ${packet.input_id}\n\n${rawText}`;
   }
   throw new Error("storycraft create requires --from-file, --stdin, or --source-input.");
 }
@@ -131,10 +132,10 @@ async function storycraftContent(projectName: string, options: CreateStorycraftO
 function normalizeContent(kind: StorycraftKind, artifactId: string, label: string, content: string): string {
   const trimmed = content.trim();
   const header = [
-    `# Storycraft ${kind}: ${label}`,
+    `# ${storycraftKindLabel(kind)}：${label}`,
     "",
-    `artifact_id: ${artifactId}`,
-    `status: report_only`,
+    `内部编号：${artifactId}`,
+    `状态：仅作为报告，不是定稿`,
     "",
   ].join("\n");
   return trimmed.startsWith("#") ? `${trimmed}\n` : `${header}${trimmed}\n`;

@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import YAML from "yaml";
 import { initProject } from "../src/project.js";
-import { ingestInput } from "../src/input.js";
+import { ingestInput, reviewPacket } from "../src/input.js";
 import { confirmVibe, createChapterIntake } from "../src/intake.js";
 import { buildContextPacket } from "../src/context.js";
 import { hardenVolume } from "../src/harden.js";
@@ -324,6 +324,21 @@ test("learning sample routes to exemplar learning without entering canon", { con
   });
 });
 
+test("default packet review uses author-facing Chinese labels", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const filePath = path.join(root, "idea.md");
+    await fs.writeFile(filePath, "#black_tower #灵感 #候选\n宇宙探险 + 玄幻。\n", "utf8");
+    const packet = await ingestInput("black_tower", filePath);
+    const review = reviewPacket(packet);
+
+    assert.match(review, /分类：灵感/);
+    assert.match(review, /状态：已初步判断/);
+    assert.match(review, /系统理解：/);
+    assert.doesNotMatch(review, /^detected_type:/m);
+    assert.doesNotMatch(review, /^status:/m);
+  });
+});
+
 test("storycraft artifacts are registered, listed, validated and exposed to GUI status/context", { concurrency: false }, async () => {
   await withProject(async (root) => {
     const inspirationPath = path.join(root, "idea.md");
@@ -377,7 +392,9 @@ test("storycraft artifacts are registered, listed, validated and exposed to GUI 
       label: "source-only payoff seed",
     });
     assert.equal(sourceOnly.artifact.kind, "payoff");
-    assert.match((await readStorycraftArtifact("black_tower", "payoff", sourceOnly.artifact.artifact_id)).content, /Source Input/);
+    const sourceOnlyContent = (await readStorycraftArtifact("black_tower", "payoff", sourceOnly.artifact.artifact_id)).content;
+    assert.match(sourceOnlyContent, /原始输入/);
+    assert.doesNotMatch(sourceOnlyContent, /Source Input/);
 
     const result = await validateProject("black_tower");
     assert.equal(result.ok, true, result.errors.join("\n"));

@@ -25,6 +25,7 @@ import { initProjectGit } from "./project-git.js";
 import { setBookProfile, showBookProfile } from "./book.js";
 import { createStorycraftArtifact, listStorycraftArtifacts, readStorycraftArtifact } from "./storycraft.js";
 import { StorycraftKind, StorycraftKindSchema } from "./schemas.js";
+import { inputStatusLabel, inputTypeLabel, storycraftKindLabel } from "./display.js";
 
 const program = new Command();
 
@@ -66,10 +67,10 @@ program
       printJson({ ok: true, packet });
       return;
     }
-    console.log(`Ingested ${packet.input_id}`);
-    console.log(`detected_type: ${packet.detected_type}`);
-    console.log(`authority_level: ${packet.authority_level}`);
-    console.log(`status: ${packet.status}`);
+    console.log(`已接收输入：${packet.input_id}`);
+    console.log(`分类：${inputTypeLabel(packet.detected_type)}`);
+    console.log(`状态：${inputStatusLabel(packet.status)}`);
+    console.log(`需要确认：${packet.requires_confirmation ? "是" : "否"}`);
   }));
 
 program
@@ -143,11 +144,11 @@ program
       return;
     }
     if (packets.length === 0) {
-      console.log("No inputs found.");
+      console.log("暂无输入。");
       return;
     }
     for (const packet of packets) {
-      console.log(`${packet.input_id}\t${packet.detected_type}\t${packet.status}\t${packet.authority_level}\t${packet.target_scope.chapter ?? "-"}`);
+      console.log(`${packet.input_id}\t${inputTypeLabel(packet.detected_type)}\t${inputStatusLabel(packet.status)}\t${packet.target_scope.chapter ?? "-"}`);
     }
   }));
 
@@ -216,11 +217,11 @@ review
       return;
     }
     if (queue.length === 0) {
-      console.log("No inputs waiting for review.");
+      console.log("暂无等待确认的内容。");
       return;
     }
     for (const item of queue) {
-      console.log(`${item.input_id}\t${item.detected_type}\t${item.authority_level}\t${item.target_scope.chapter ?? "-"}`);
+      console.log(`${item.input_id}\t${inputTypeLabel(item.detected_type)}\t${item.target_scope.chapter ?? "-"}`);
     }
   }));
 
@@ -236,11 +237,11 @@ review
       return;
     }
     if (pending.length === 0) {
-      console.log("No approved inputs waiting for apply.");
+      console.log("暂无已确认但未写入的内容。");
       return;
     }
     for (const item of pending) {
-      console.log(`${item.input_id}\t${item.detected_type}\t${item.authority_level}\t${item.target_scope.chapter ?? "-"}`);
+      console.log(`${item.input_id}\t${inputTypeLabel(item.detected_type)}\t${item.target_scope.chapter ?? "-"}`);
     }
   }));
 
@@ -555,8 +556,8 @@ for (const kind of ["premise", "payoff", "emotion", "brief"] as StorycraftKind[]
         printJson(result);
         return;
       }
-      console.log(`Registered ${result.artifact.artifact_id}`);
-      console.log(`content: ${result.artifact.content_file}`);
+      console.log(`已登记${storycraftKindLabel(result.artifact.kind)}：${result.artifact.artifact_id}`);
+      console.log(`内容文件：${result.artifact.content_file}`);
     }));
 
   command

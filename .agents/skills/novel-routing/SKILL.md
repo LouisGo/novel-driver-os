@@ -13,6 +13,7 @@ description: Route / 输入路由；用于把已有 AuthorInputPacket 分配到 
 
 - 目标 作者输入包。
 - `project.yaml`。
+- `../_shared/author-facing-language-protocol.md`。
 - `../_shared/canon-safety-protocol.md`。
 - `../_shared/commercial-storycraft-protocol.md`。
 - 当前字段必须对齐 `src/route.ts` 的 `RoutePlan` 接口。
@@ -40,7 +41,7 @@ description: Route / 输入路由；用于把已有 AuthorInputPacket 分配到 
 
 ## 输出
 
-输出 `route_plan`：
+面向作者时输出“下一步建议”，不要把 `route_plan` 当标题。内部登记时可保存以下字段：
 
 - `input_id`
 - `primary_route`

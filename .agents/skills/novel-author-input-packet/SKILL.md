@@ -15,6 +15,7 @@ disable-model-invocation: true
 - 原始输入全文。
 - `project.yaml`。
 - 如已有 `triage_report`：读取分流结论；如没有，先调用或产出分流报告，不在本技能内扩展完整分流逻辑。
+- `../_shared/author-facing-language-protocol.md`。
 - `../_shared/canon-safety-protocol.md`。
 - 当前字段必须对齐 `src/schemas.ts` 的 `AuthorInputPacketSchema`。
 

@@ -21,6 +21,8 @@
 - `feedback`
 - `unknown`
 
+这些是系统内部分类。面向作者或 GUI 时必须显示中文分类名，例如“灵感”“章节正文”“书名/简介”“文风反馈”，不要直接展示 `detected_type` 或英文枚举。完整映射见 `docs/author-facing-language.md`。
+
 轻标记可以降低误判：
 
 ```text
@@ -50,6 +52,8 @@ source_actor:
 supersedes_input_id:
 created_at:
 ```
+
+这些字段是系统记录，不是默认给创作者看的界面文案。普通展示应转换为“输入编号、分类、状态、系统理解、建议下一步”。
 
 输入状态机：
 

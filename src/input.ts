@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import YAML from "yaml";
 import {
   AuthorInputPacket,
   AuthorInputPacketSchema,
@@ -21,6 +20,7 @@ import { projectRoot, relativeToProject, safeName } from "./paths.js";
 import { compactTimestamp, nowIso } from "./time.js";
 import { appendDiscardedBrillianceCandidate } from "./discarded.js";
 import { appendTrace } from "./trace.js";
+import { inputStatusLabel, inputTypeLabel } from "./display.js";
 
 export interface PacketLocation {
   packet: AuthorInputPacket;
@@ -138,7 +138,20 @@ export async function ignoreInput(projectName: string, inputId: string): Promise
 }
 
 export function reviewPacket(packet: AuthorInputPacket): string {
-  return YAML.stringify(packet, { lineWidth: 0 });
+  const lines = [
+    `输入编号：${packet.input_id}`,
+    `分类：${inputTypeLabel(packet.detected_type)}`,
+    `状态：${inputStatusLabel(packet.status)}`,
+    `是否需要确认：${packet.requires_confirmation ? "需要" : "不需要"}`,
+    `原文位置：${packet.raw_source_path}`,
+    "",
+    "系统理解：",
+    ...packet.system_interpretation.map((item) => `- ${item}`),
+    "",
+    "建议下一步：",
+    ...packet.recommended_actions.map((item) => `- ${item}`),
+  ];
+  return lines.join("\n");
 }
 
 export function buildAuthorInputPacket(
@@ -302,25 +315,25 @@ function confidenceFor(tags: Set<string>, type: InputType): number {
 }
 
 function interpretationsFor(type: InputType, entity: string | null, chapter: string | null, intents: InputType[] = [type]): string[] {
-  const target = entity ? `目标实体可能是 ${entity}。` : "暂未识别到明确目标实体。";
+  const target = entity ? `可能关联的人物或对象：${entity}。` : "暂未识别到明确人物或对象。";
   const chapterText = chapter ? `目标章节可能是 ${chapter}。` : "暂未识别到明确章节。";
-  const common = [`检测到的输入意图：${intents.join(", ")}。`, target, chapterText, "该输入不会直接写入正史，只会作为候选、proposal 或 intake 来源。"];
+  const common = [`识别到的输入分类：${intents.map(inputTypeLabel).join("、")}。`, target, chapterText, "这条输入不会直接写入正史资料，只会先作为草案、待确认提案或后续处理来源。"];
   const byType: Record<InputType, string> = {
     inspiration: "这更像一条灵感碎片，适合进入候选池或 open_questions。",
-    chapter: "这更像作者亲写章节，适合进入 Human Chapter Intake。",
-    fragment: "这更像正文片段，适合进入 Human Chapter Intake 但需要作者确认范围。",
-    book_profile: "这更像书名、题材或小说简介输入，适合更新 book profile。",
-    outline: "这更像卷级或章节级大纲，适合生成 plot memory patch proposal。",
-    setting: "这更像设定想法，适合生成 memory patch proposal。",
+    chapter: "这更像作者亲写章节，适合先提取事实、人物变化和后续风险。",
+    fragment: "这更像正文片段，适合先提取信息，但需要作者确认范围。",
+    book_profile: "这更像书名、题材或小说简介输入，适合更新作品资料。",
+    outline: "这更像卷级或章节级大纲，适合生成待确认的大纲提案。",
+    setting: "这更像设定想法，适合生成待确认的设定提案。",
     character: "这更像人设候选，尤其不能直接写入角色正史。",
-    worldbuilding: "这更像世界观想法，适合与 world_contract 对齐。",
-    ambiguity: "这更像有意留白，应保护为 intentional ambiguity。",
-    style_feedback: "这更像文风反馈，适合进入 style candidate。",
+    worldbuilding: "这更像世界观想法，适合检查是否和已有世界规则冲突。",
+    ambiguity: "这更像有意留白，应避免被系统提前解释死。",
+    style_feedback: "这更像文风反馈，适合整理为待确认的文风规则。",
     learning_sample: "这更像外部优秀样本投喂，应先提炼可迁移技法，不能进入正史。",
-    discarded_idea: "这更像废案或被舍弃灵感，应进入 discarded brilliance 候选。",
-    rewrite_request: "这更像重写或比稿请求，应进入 variant workflow。",
-    chapter_variant: "这更像章节候选变体，应登记为 variant，而不是直接覆盖正稿。",
-    feedback: "这更像作者对 AI 稿或系统理解的反馈，适合进入 alignment。",
+    discarded_idea: "这更像废案或被舍弃灵感，应保存为可回看但不启用的素材。",
+    rewrite_request: "这更像重写或比稿请求，应进入多版本比较。",
+    chapter_variant: "这更像章节候选版本，应登记为版本，而不是直接覆盖正稿。",
+    feedback: "这更像作者对 AI 稿或系统理解的反馈，适合用于后续对齐。",
     unknown: "系统无法稳定判断输入类型，需要作者确认。",
   };
   return [byType[type], ...common];

@@ -9,6 +9,7 @@ Novel Driver OS 是一个文件系统型网文创作副驾。它不是 AI 代写
 - AI 只能生成 candidate、proposal、patch、report、hypothesis。
 - AI 不得直接覆盖 `canon_registry.md`、`style_bible.md` 或 `final.md`。
 - 氛围必须有证据和确认，意图必须有置信度和 TTL。
+- 默认输出必须使用作者可读的中文创作语言；英文内部字段、状态值和文件路径只出现在调试、CLI JSON 或开发文档中。
 
 ## Manual / Assisted / Auto
 
@@ -215,6 +216,8 @@ novel storycraft brief show black_tower <artifactId> --json
 - `emotion`：压力、蓄势、兑现、缓冲、余波和转向。
 - `brief`：下一章作战简报，可作为生成章节或 variant 的输入。
 - `status --json` 会返回 `storycraft_artifacts`，`context build` 会纳入最近 storycraft 内容。
+
+面向作者或 GUI 时，以上内部分类应显示为：创作方向、爽点设计、情绪节奏、章节作战简报。`--json` 仍保留机器字段，详见 `docs/author-facing-language.md`。
 
 ## Book Profile
 

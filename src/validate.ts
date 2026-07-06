@@ -11,6 +11,7 @@ import {
   IntentionHypothesesFileSchema,
   ProjectSchema,
   RetconDebtSchema,
+  StorycraftManifestSchema,
 } from "./schemas.js";
 
 export interface ValidationResult {
@@ -116,6 +117,7 @@ export async function validateProject(projectName: string): Promise<ValidationRe
 
   await validateRetconDebtProtocol(root, path.join(root, "70_debt/retcon_debt.yaml"), errors);
   await validateVariants(root, errors);
+  await validateStorycraftArtifacts(root, errors);
   await validateSnapshots(root, errors);
 
   const discarded = path.join(root, "40_style/discarded_brilliance.md");
@@ -328,6 +330,24 @@ async function validateVariants(root: string, errors: string[]): Promise<void> {
       if (winners.length > 1) errors.push(`${relative(root, file)} cannot contain more than one winner`);
     } catch (error) {
       errors.push(`Invalid ${relative(root, file)}: ${(error as Error).message}`);
+    }
+  }
+}
+
+async function validateStorycraftArtifacts(root: string, errors: string[]): Promise<void> {
+  const storycraftFiles = (await listFilesRecursive(path.join(root, "35_storycraft"))).filter((file) => file.endsWith(".yaml"));
+  for (const file of storycraftFiles) {
+    try {
+      const manifest = StorycraftManifestSchema.parse(await readYaml(file));
+      if (!(await pathExists(path.join(root, manifest.content_file)))) {
+        errors.push(`${relative(root, file)} content_file does not exist: ${manifest.content_file}`);
+      }
+      const expected = `35_storycraft/${manifest.kind}/`;
+      if (!relative(root, file).startsWith(expected)) {
+        errors.push(`${relative(root, file)} kind ${manifest.kind} belongs under ${expected}`);
+      }
+    } catch (error) {
+      errors.push(`Invalid storycraft manifest ${relative(root, file)}: ${(error as Error).message}`);
     }
   }
 }

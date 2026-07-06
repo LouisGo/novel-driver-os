@@ -17,6 +17,7 @@
 - `70_debt/retcon_debt.yaml`
 - `ghost_resonance_report.md`
 - 最近 `60_alignment/` 中的章节质量趋势和 must-fix。
+- 最近的 `premise_alchemy_report`、`payoff_architecture_report`、`emotion_curve_report`、`learning_transfer_plan`，只在目标是写作、改稿或章节 brief 时读取。
 
 ## 条件读取
 
@@ -24,6 +25,7 @@
 - tentative vibes：只在 TTL 范围内读取。
 - recent intake：当前任务相关时读取。
 - `chapter_quality_review.md`：当任务是写下一章、审稿、风格对齐或瓶颈诊断时读取最近 1-3 章；只带低分维度、硬门槛和最小改法，不带长篇流水意见。
+- `chapter_brief` 输入材料：当任务是写下一章或生成 variant 时，读取 reader_question、pending_payoff、emotion_curve_risks、do_not_write、acceptance_checks；不读取无关长评。
 - 温层/冷层 summaries：只在任务需要跨卷信息时读取。
 
 ## 默认不读
@@ -44,6 +46,6 @@
 写作或审稿 context 中，质量信息最多保留：
 
 - 最近 1-3 章各自 `decision` 和 `overall_score`。
-- 连续低分维度，例如 `hook_ladder`、`human_texture`、`ai_flavor`。
+- 连续低分维度，例如 `hook_ladder`、`human_texture`、`ai_flavor`、`true_payoff`、`emotion_curve`、`anti_industrial_flavor`。
 - 下一章 must-fix，不超过 3 条。
 - 作者已确认的取舍，例如“慢热可接受，但第一屏仍要有主角压力”。

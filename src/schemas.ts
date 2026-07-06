@@ -148,6 +148,33 @@ export const RetconDebtSchema = z.object({
   entries: z.array(RetconDebtEntrySchema),
 });
 
+export const StorycraftKindSchema = z.enum([
+  "premise",
+  "payoff",
+  "emotion",
+  "brief",
+]);
+
+export const StorycraftManifestSchema = z.object({
+  artifact_id: SafeIdSchema,
+  project: SafeIdSchema,
+  kind: StorycraftKindSchema,
+  label: z.string().min(1),
+  status: z.enum(["report_only", "candidate_only", "approved_reference"]).default("report_only"),
+  source_input_id: SafeIdSchema.nullable(),
+  target_scope: TargetScopeSchema,
+  source_actor: z.enum(["human", "agent", "model"]).default("agent"),
+  content_file: z.string().min(1).refine((value) => !value.startsWith("/") && !value.split(/[\\/]/).includes(".."), {
+    message: "must be a relative path inside the project",
+  }),
+  summary: z.string(),
+  created_at: z.string().min(1),
+  next_commands: z.array(z.string()),
+});
+
+export type StorycraftKind = z.infer<typeof StorycraftKindSchema>;
+export type StorycraftManifest = z.infer<typeof StorycraftManifestSchema>;
+
 export const ProjectSchema = z.object({
   name: SafeIdSchema,
   schema_version: z.string().min(1),

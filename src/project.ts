@@ -28,6 +28,10 @@ const PROJECT_DIRS = [
 const OPTIONAL_PROJECT_DIRS = [
   "00_inbox/routes",
   "00_inbox/reviews",
+  "35_storycraft/premise",
+  "35_storycraft/payoff",
+  "35_storycraft/emotion",
+  "35_storycraft/brief",
   "50_chapters/variants",
   "90_archive/snapshots",
 ];
@@ -247,6 +251,7 @@ This is a Novel Driver OS project.
 - \`10_bible/\`: long-term canon-facing memory. AI writes proposals, not canon.
 - \`20_entities/\`: character, faction, location and item state.
 - \`30_plot/\`: timeline, event ledger, foreshadowing and unresolved hooks.
+- \`35_storycraft/\`: premise, payoff, emotion curve and chapter brief artifacts.
 - \`40_style/\`: confirmed style, aspirational style, anti-style and discarded brilliance.
 - \`50_chapters/\`: hot, warm and cold chapter layers.
 - \`60_alignment/\`: weekly author alignment reports.

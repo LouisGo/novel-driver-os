@@ -4,6 +4,7 @@ import { assertSafeId, projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
 import { FactDeltaSchema } from "./schemas.js";
 import { appendTrace } from "./trace.js";
+import { listStorycraftArtifacts } from "./storycraft.js";
 
 export async function buildContextPacket(projectName: string, chapter: string): Promise<string> {
   assertSafeId(chapter, "chapter");
@@ -23,6 +24,7 @@ export async function buildContextPacket(projectName: string, chapter: string): 
     { title: "Anti Style", files: ["40_style/anti_style.md"] },
     { title: "Aspirational Style", files: ["40_style/aspirational_style.md"] },
     { title: "Retcon Debt", files: ["70_debt/retcon_debt.yaml"] },
+    { title: "Storycraft Artifacts", files: (await listStorycraftArtifacts(projectName)).slice(0, 8).map((artifact) => artifact.content_file) },
     { title: "Ghost Resonance", files: ["ghost_resonance_report.md"] },
     { title: "Confirmed Vibes", files: await relativeFiles(root, "01_intake", "confirmed_vibes.md") },
     { title: "Short-Term Tentative Vibes", files: shortTermTentativeVibes },

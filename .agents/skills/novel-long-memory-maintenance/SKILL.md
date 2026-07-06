@@ -1,6 +1,7 @@
 ---
 name: novel-long-memory-maintenance
 description: Long Memory Maintenance / 长篇记忆维护；用于地质分层、hot/warm/cold/deep archive、卷级 hardening、snapshot/rollback 与 context_policy；只做可审计维护计划，不删除源文件。
+disable-model-invocation: true
 ---
 
 # 长篇记忆维护

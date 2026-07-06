@@ -23,6 +23,7 @@ import { compareVariants, decideVariant, registerVariant } from "../src/variant.
 import { createSnapshot, restoreSnapshot } from "../src/snapshot.js";
 import { getSessionStatus, pauseSession, resumeSession } from "../src/session.js";
 import { setBookProfile } from "../src/book.js";
+import { createStorycraftArtifact, listStorycraftArtifacts, readStorycraftArtifact } from "../src/storycraft.js";
 
 test("validator rejects intention and retcon debt protocol violations", { concurrency: false }, async () => {
   await withProject(async (root) => {
@@ -169,10 +170,12 @@ test("multi-intent input, outline route and non-chapter proposal enter review lo
     await fs.writeFile(outlinePath, "#black_tower #大纲 #候选\n第一卷：主角查清旧案，进入学馆，卷尾发现父亲留下反证。\n", "utf8");
     const outlinePacket = await ingestInput("black_tower", outlinePath);
     const route = await routeInput("black_tower", outlinePacket.input_id);
-    assert.equal(route.route_plan.primary_route, "memory_patch_proposal");
+    assert.equal(route.route_plan.primary_route, "emotion_curve");
     assert.deepEqual(route.route_plan.blocked_by, []);
+    assert(route.route_plan.responsible_roles.includes("Emotion Curator"));
     assert(route.route_plan.responsible_roles.includes("Canon Checker"));
-    assert.deepEqual(route.route_plan.next_commands, [`novel propose black_tower ${outlinePacket.input_id} --kind outline`]);
+    assert(route.route_plan.next_commands.includes(`agent: use novel-emotion-curve for black_tower ${outlinePacket.input_id}`));
+    assert(route.route_plan.next_commands.includes(`novel propose black_tower ${outlinePacket.input_id} --kind outline`));
 
     const proposal = await createMemoryProposal("black_tower", outlinePacket.input_id, "outline");
     assert.equal(proposal.kind, "outline");
@@ -318,6 +321,66 @@ test("learning sample routes to exemplar learning without entering canon", { con
     assert(route.route_plan.responsible_roles.includes("Style Curator"));
     assert(route.route_plan.blocked_by.includes("agent_skill_required_novel_exemplar_learning"));
     assert(route.route_plan.next_commands.includes(`agent: use novel-exemplar-learning for black_tower ${packet.input_id}`));
+  });
+});
+
+test("storycraft artifacts are registered, listed, validated and exposed to GUI status/context", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const inspirationPath = path.join(root, "idea.md");
+    await fs.writeFile(inspirationPath, "#black_tower #灵感\n一个被城市记忆排斥的人，靠修复别人的遗憾升级。\n", "utf8");
+    const packet = await ingestInput("black_tower", inspirationPath);
+    const route = await routeInput("black_tower", packet.input_id);
+    assert.equal(route.route_plan.primary_route, "premise_alchemy");
+    assert(route.route_plan.blocked_by.includes("agent_skill_required_novel_premise_alchemy"));
+    assert(route.route_plan.next_commands.some((command) => command.includes("storycraft premise create")));
+
+    const reportPath = path.join(root, "premise-report.md");
+    await fs.writeFile(reportPath, [
+      "# Premise Alchemy Report",
+      "",
+      "one_sentence_hook: 被城市记忆排斥的少年，通过修复他人的遗憾夺回自己的存在。",
+      "freshness_hook: 升级流 + 城市记忆 + 情绪债务。",
+      "human_need: 被抹去的人重新被看见。",
+    ].join("\n"), "utf8");
+
+    const created = await createStorycraftArtifact("black_tower", "premise", {
+      fromFile: reportPath,
+      sourceInput: packet.input_id,
+      label: "记忆排斥卖点",
+      summary: "升级流与城市记忆碰撞的一句话卖点。",
+      sourceActor: "agent",
+    });
+    assert.equal(created.artifact.kind, "premise");
+    assert.equal(created.artifact.source_input_id, packet.input_id);
+    assert(created.changed_files.includes(created.artifact.content_file));
+
+    const listed = await listStorycraftArtifacts("black_tower", "premise");
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].artifact_id, created.artifact.artifact_id);
+
+    const shown = await readStorycraftArtifact("black_tower", "premise", created.artifact.artifact_id);
+    assert.match(shown.content, /城市记忆/);
+
+    const status = await getProjectStatus("black_tower");
+    assert.equal(status.storycraft_artifacts.length, 1);
+    assert.equal(status.storycraft_artifacts[0].artifact_id, created.artifact.artifact_id);
+
+    const context = await fs.readFile(await buildContextPacket("black_tower", "ch0001"), "utf8");
+    assert.match(context, /Storycraft Artifacts/);
+    assert.match(context, /城市记忆/);
+
+    const trace = await readTraceTail("black_tower", 20);
+    assert(trace.some((event) => event.command === "storycraft.premise.create"));
+
+    const sourceOnly = await createStorycraftArtifact("black_tower", "payoff", {
+      sourceInput: packet.input_id,
+      label: "source-only payoff seed",
+    });
+    assert.equal(sourceOnly.artifact.kind, "payoff");
+    assert.match((await readStorycraftArtifact("black_tower", "payoff", sourceOnly.artifact.artifact_id)).content, /Source Input/);
+
+    const result = await validateProject("black_tower");
+    assert.equal(result.ok, true, result.errors.join("\n"));
   });
 });
 

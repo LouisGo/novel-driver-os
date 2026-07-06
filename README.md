@@ -197,6 +197,25 @@ raw -> triaged -> routed -> pending_confirmation -> applied / archived / ignored
 - `patch apply` 只应用已 approve 的 `memory_patch.yaml`，并在应用前自动创建 snapshot。
 - 关键动作会追加到项目根目录 `trace.jsonl`，用于 GUI 活动流和断点恢复。
 
+## Storycraft Artifacts
+
+题材炼金、爽点架构、情绪曲线和章节作战简报是一等创作产物，写入 `35_storycraft/`，供 CLI、Codex agent 和未来 GUI 读取。CLI 只登记 agent/作者/模型产出的报告，不直接调用模型生成内容。
+
+```bash
+novel storycraft premise create black_tower --source-input <inputId> --from-file ./premise.md --label "核心卖点" --json
+novel storycraft payoff create black_tower --from-file ./payoff.md --chapter ch0001 --json
+novel storycraft emotion create black_tower --from-file ./curve.md --chapter ch0002 --json
+novel storycraft brief create black_tower --from-file ./brief.md --chapter ch0003 --json
+novel storycraft brief list black_tower --json
+novel storycraft brief show black_tower <artifactId> --json
+```
+
+- `premise`：一句话卖点、题材碰撞、读者承诺。
+- `payoff`：承诺、铺垫、延迟、兑现、代价和后果。
+- `emotion`：压力、蓄势、兑现、缓冲、余波和转向。
+- `brief`：下一章作战简报，可作为生成章节或 variant 的输入。
+- `status --json` 会返回 `storycraft_artifacts`，`context build` 会纳入最近 storycraft 内容。
+
 ## Book Profile
 
 书名和小说简介是一等项目资料，写入 `10_bible/book_profile.yaml`，会参与导出命名和 context packet。

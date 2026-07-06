@@ -28,6 +28,7 @@ Creator Input Layer
 - `01_intake/` 保存系统理解和候选记忆补丁。
 - `10_bible/` 面向长期正史，但 MVP 不让 AI 直接写入。
 - `10_bible/book_profile.yaml` 保存书名、简介、题材和标签，供 context 和导出命名使用。
+- `35_storycraft/` 保存题材炼金、爽点架构、情绪曲线和章节 brief，供 GUI 和 agent 复用。
 - `50_chapters/` 保存 accepted chapter 层、chapter index 和 variants。
 - `80_context/` 保存为下一步任务组装的上下文包。
 - `90_archive/snapshots/` 保存可恢复快照。
@@ -38,6 +39,7 @@ Creator Input Layer
 - `canon_registry.md` 只能由作者确认后更新。
 - `style_bible.md` 只能记录稳定确认过的风格。
 - `memory_patch.yaml` 是 proposal，不是事实本身。
+- `35_storycraft/*/*.yaml` 是 report/brief manifest，不是正史或定稿正文。
 - `patch apply` 只能应用已经 `review decide --decision approve` 的补丁。
 - `chapter accept` 只能接受已 approve 或已 applied 的输入，variant 胜者也必须通过该入口进入章节层。
 - `snapshot restore` 不覆盖 raw inbox 和 trace，只恢复长期记忆、plot、style、chapters 和 manifests。

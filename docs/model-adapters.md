@@ -19,7 +19,7 @@ interface ModelAdapter {
 - `ModelOutput`
 - `ModelCapabilities`
 
-V1 Codex 手动挡中，模型生成由 agent 发起。CLI 不直接调用 GPT、DeepSeek 或 Gemini；agent/model 产物必须先作为 Author Input Packet、memory patch proposal、chapter variant 或 report 进入文件协议。
+V1 Codex 手动挡中，模型生成由 agent 发起。CLI 不直接调用 GPT、DeepSeek 或 Gemini；agent/model 产物必须先作为 Author Input Packet、memory patch proposal、storycraft artifact、chapter variant 或 report 进入文件协议。
 
 约束：
 

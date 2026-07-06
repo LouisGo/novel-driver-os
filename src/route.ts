@@ -97,9 +97,9 @@ function buildRoutePlan(packet: AuthorInputPacket): RoutePlan {
 function routeFor(type: InputType): { primary: string; secondary: string[]; blocked: string[] } {
   const routes: Record<InputType, { primary: string; secondary: string[]; blocked: string[] }> = {
     inspiration: {
-      primary: "weekly_alignment",
-      secondary: ["open_questions_candidate"],
-      blocked: [],
+      primary: "premise_alchemy",
+      secondary: ["payoff_architecture", "weekly_alignment"],
+      blocked: ["agent_skill_required_novel_premise_alchemy"],
     },
     chapter: {
       primary: "human_chapter_intake",
@@ -112,13 +112,13 @@ function routeFor(type: InputType): { primary: string; secondary: string[]; bloc
       blocked: [],
     },
     book_profile: {
-      primary: "book_profile",
-      secondary: ["style_candidate", "weekly_alignment"],
-      blocked: [],
+      primary: "premise_alchemy",
+      secondary: ["book_profile", "style_candidate", "weekly_alignment"],
+      blocked: ["agent_skill_required_novel_premise_alchemy"],
     },
     outline: {
-      primary: "memory_patch_proposal",
-      secondary: ["plot_architect", "canon_checker"],
+      primary: "emotion_curve",
+      secondary: ["payoff_architecture", "memory_patch_proposal", "canon_checker"],
       blocked: [],
     },
     setting: {
@@ -158,7 +158,7 @@ function routeFor(type: InputType): { primary: string; secondary: string[]; bloc
     },
     rewrite_request: {
       primary: "variant_workflow",
-      secondary: ["chapter_quality_review", "style_candidate"],
+      secondary: ["chapter_brief", "chapter_quality_review", "style_candidate"],
       blocked: ["agent_must_generate_variant_files_before_register"],
     },
     chapter_variant: {
@@ -182,11 +182,11 @@ function routeFor(type: InputType): { primary: string; secondary: string[]; bloc
 
 function commandsFor(projectName: string, inputId: string, type: InputType): string[] {
   const commands: Record<InputType, string[]> = {
-    inspiration: [`novel align weekly ${projectName}`],
+    inspiration: [`agent: use novel-premise-alchemy for ${projectName} ${inputId}`, `novel storycraft premise create ${projectName} --source-input ${inputId} --from-file <premise-report>`],
     chapter: [`novel intake chapter ${projectName} ${inputId}`],
     fragment: [`novel intake chapter ${projectName} ${inputId}`],
-    book_profile: [`novel book set ${projectName} --source-input ${inputId} --title <title> --synopsis <synopsis>`],
-    outline: [`novel propose ${projectName} ${inputId} --kind outline`],
+    book_profile: [`agent: use novel-premise-alchemy for ${projectName} ${inputId}`, `novel storycraft premise create ${projectName} --source-input ${inputId} --from-file <premise-report>`, `novel book set ${projectName} --source-input ${inputId} --title <title> --synopsis <synopsis>`],
+    outline: [`agent: use novel-emotion-curve for ${projectName} ${inputId}`, `novel storycraft emotion create ${projectName} --source-input ${inputId} --from-file <emotion-report>`, `novel propose ${projectName} ${inputId} --kind outline`],
     setting: [`novel propose ${projectName} ${inputId} --kind setting`],
     character: [`novel propose ${projectName} ${inputId} --kind character`],
     worldbuilding: [`novel propose ${projectName} ${inputId} --kind worldbuilding`],
@@ -194,8 +194,8 @@ function commandsFor(projectName: string, inputId: string, type: InputType): str
     style_feedback: [`novel style candidate ${projectName} ${inputId}`],
     learning_sample: [`agent: use novel-exemplar-learning for ${projectName} ${inputId}`],
     discarded_idea: [`novel ghost scan ${projectName}`],
-    rewrite_request: [`novel variant register ${projectName} ${inputId} --from-file <draft-file> --label <label>`],
-    chapter_variant: [`novel variant register ${projectName} ${inputId} --from-file <draft-file> --label <label>`],
+    rewrite_request: [`agent: use novel-chapter-brief-builder for ${projectName} ${inputId}`, `novel storycraft brief create ${projectName} --source-input ${inputId} --from-file <brief-file> --chapter <chapter>`, `novel variant register ${projectName} ${inputId} --from-file <draft-file> --label <label>`],
+    chapter_variant: [`novel storycraft brief create ${projectName} --source-input ${inputId} --from-file <brief-file> --chapter <chapter>`, `novel variant register ${projectName} ${inputId} --from-file <draft-file> --label <label>`],
     feedback: [`novel align weekly ${projectName}`],
     unknown: [`novel review detail ${projectName} ${inputId}`],
   };
@@ -205,11 +205,11 @@ function commandsFor(projectName: string, inputId: string, type: InputType): str
 function actionsFor(type: InputType, blocked: string[]): string[] {
   if (blocked.length > 0) return ["manual_review_required", ...blocked];
   const actions: Record<InputType, string[]> = {
-    inspiration: ["review_in_weekly_alignment"],
+    inspiration: ["run_premise_alchemy", "record_storycraft_premise", "review_in_weekly_alignment"],
     chapter: ["run_human_chapter_intake"],
     fragment: ["run_human_chapter_intake", "ask_author_for_scope"],
-    book_profile: ["set_book_profile", "confirm_title_and_synopsis"],
-    outline: ["generate_outline_memory_patch", "ask_author_confirmation"],
+    book_profile: ["run_premise_alchemy", "set_book_profile", "confirm_title_and_synopsis"],
+    outline: ["run_emotion_curve", "generate_outline_memory_patch", "ask_author_confirmation"],
     setting: ["generate_memory_patch_candidate", "ask_author_confirmation"],
     character: ["add_to_character_candidates", "ask_author_confirmation"],
     worldbuilding: ["generate_world_contract_patch_candidate", "ask_author_confirmation"],
@@ -217,7 +217,7 @@ function actionsFor(type: InputType, blocked: string[]): string[] {
     style_feedback: ["generate_style_candidate", "review_in_weekly_alignment"],
     learning_sample: ["run_exemplar_learning", "extract_transferable_techniques", "do_not_copy_sample_content"],
     discarded_idea: ["append_discarded_brilliance_candidate", "record_resurrection_triggers"],
-    rewrite_request: ["generate_variant_files", "register_variants", "compare_variants"],
+    rewrite_request: ["build_chapter_brief", "generate_variant_files", "register_variants", "compare_variants"],
     chapter_variant: ["register_chapter_variant", "compare_variants"],
     feedback: ["review_alignment_feedback", "adjust_system_interpretation"],
     unknown: ["manual_review_required"],
@@ -237,11 +237,11 @@ function riskNotesFor(packet: AuthorInputPacket): string[] {
 
 function rolesFor(type: InputType): string[] {
   const roles: Record<InputType, string[]> = {
-    inspiration: ["Router", "Context Assembler"],
+    inspiration: ["Router", "Premise Alchemist", "Payoff Architect", "Context Assembler"],
     chapter: ["Router", "Chapter Doctor", "Canon Checker", "Continuity Keeper", "Context Assembler"],
     fragment: ["Router", "Chapter Doctor", "Canon Checker", "Context Assembler"],
-    book_profile: ["Router", "Style Curator", "Context Assembler"],
-    outline: ["Router", "Canon Checker", "Continuity Keeper", "Context Assembler"],
+    book_profile: ["Router", "Premise Alchemist", "Style Curator", "Context Assembler"],
+    outline: ["Router", "Emotion Curator", "Payoff Architect", "Canon Checker", "Continuity Keeper", "Context Assembler"],
     setting: ["Router", "Canon Checker", "Continuity Keeper"],
     character: ["Router", "Canon Checker"],
     worldbuilding: ["Router", "Canon Checker", "Context Assembler"],
@@ -249,7 +249,7 @@ function rolesFor(type: InputType): string[] {
     style_feedback: ["Router", "Style Curator"],
     learning_sample: ["Router", "Style Curator", "Variant Judge"],
     discarded_idea: ["Router", "Continuity Keeper"],
-    rewrite_request: ["Router", "Chapter Doctor", "Style Curator", "Variant Judge"],
+    rewrite_request: ["Router", "Chapter Doctor", "Brief Builder", "Style Curator", "Variant Judge"],
     chapter_variant: ["Router", "Chapter Doctor", "Variant Judge"],
     feedback: ["Router", "Style Curator", "Context Assembler"],
     unknown: ["Router"],

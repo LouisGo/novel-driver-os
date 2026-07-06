@@ -61,6 +61,15 @@ raw -> triaged -> routed -> processed -> pending_confirmation -> approved_pendin
 
 书名、小说简介、题材标签属于 `book_profile`，由 `novel book set` 更新 `10_bible/book_profile.yaml`，不混入普通大纲或世界观。
 
+题材新意、爽点、情绪曲线和章节作战简报不直接进入正史。它们应先由对应 skill 生成 report/brief，再用 `novel storycraft <premise|payoff|emotion|brief> create` 登记到 `35_storycraft/`。典型输入包括：
+
+- “这个套路怎么包装得更新？”
+- “这个爽点是不是自嗨？”
+- “大战之后需要怎么缓冲？”
+- “帮我为下一章做作战简报”
+
+route 会给出 `agent: use novel-premise-alchemy`、`novel-payoff-architecture`、`novel-emotion-curve` 或 `novel-chapter-brief-builder`，随后登记 storycraft artifact。
+
 `learning_sample` 用于“投喂优秀样本”。典型输入包括：
 
 - “这段写得好，帮我学习它的节奏”

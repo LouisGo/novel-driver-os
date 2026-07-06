@@ -15,16 +15,19 @@ description: Context Assemble / 上下文组装；用于下一章写作、审稿
 - `project.yaml`、`10_bible/`、相关 `20_entities/`、`30_plot/`、`40_style/`、`70_debt/`。
 - 选择规则详见 `references/context-selection.md`。
 - 若目标是写作或审稿，加入近期 `chapter_quality_review`、`60_alignment/` 里的质量趋势和下一章 must-fix。
+- 若目标是写下一章或生成 variant，优先准备给 `novel-chapter-brief-builder` 使用的材料，不直接写正文。
+- `../_shared/commercial-storycraft-protocol.md`。
 - `../_shared/canon-safety-protocol.md`。
 
 ## 工作流程
 
-1. 明确任务：写作、审稿、对齐、补丁、风格还是硬化。
+1. 明确任务：写作、章节 brief、审稿、对齐、补丁、风格还是硬化。
 2. 选择相关实体：人物、势力、地点、物件都要纳入候选。
 3. 读取 confirmed vibes；tentative vibes 只在 TTL 内短期加入。
 4. 加入 intentional ambiguity 禁区和 retcon debt 风险。
 5. 加入最近 1-3 章的审稿硬门槛、低分维度和已确认的作者取舍，避免下一章重复问题。
-6. 输出 context packet，不执行创作任务。
+6. 如目标是写作，列出可供 brief 使用的读者问题、待兑现爽点、情绪曲线风险和本章禁区。
+7. 输出 context packet，不执行创作任务。
 
 ## 输出
 
@@ -34,6 +37,7 @@ description: Context Assemble / 上下文组装；用于下一章写作、审稿
 - `excluded`：全书正文、深档案、过期弱猜测、无关草稿。
 - `source_refs`：每类上下文来自哪些项目内文件。
 - `next_task_fit`：说明该 context 如何支撑目标任务。
+- `brief_inputs`：可选；写作任务下包含 reader_question、pending_payoff、emotion_curve_risks、do_not_write。
 
 ## 禁止
 

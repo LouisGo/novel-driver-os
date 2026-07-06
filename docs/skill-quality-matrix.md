@@ -1,8 +1,8 @@
 # 技能质量矩阵
 
-本文件记录 24 个中文网文技能的验收状态。评分采用统一评分规程：结构合规、触发准确、协议安全、中文适配、可执行性、边界清楚、自检完整。通过线为平均分不低于 4，且协议安全满分。
+本文件记录 28 个商业连载创作技能的验收状态。评分采用统一评分规程：结构合规、触发准确、协议安全、创作有效性、可执行性、边界清楚、自检完整。通过线为平均分不低于 4，且协议安全满分。
 
-当前调用面：17 个 model-invoked 技能用于 Codex 自动识别创作意图；7 个 user-invoked 技能保留为协议参考或手动调用，降低常态上下文负担。
+当前调用面：20 个 model-invoked 技能用于 Codex 自动识别创作意图；8 个 user-invoked 技能保留为协议参考或手动调用，降低常态上下文负担。
 
 | 技能 | 层级 | 状态 | 分数 | 打回次数 | 审稿结论 |
 | --- | --- | --- | --- | --- | --- |
@@ -14,27 +14,32 @@
 | novel-memory-patch | P0 | 通过 | 4.5 | 0 | proposal-only 边界明确，可回滚。 |
 | novel-canon-checker | P0 | 通过 | 4.4 | 0 | 审稿姿态正确，保留作者偏航权。 |
 | novel-context-assembler | P0 | 复审通过 | 4.6 | 2 | 已保留 `included` / `excluded` 协议键，并将子栏目中文化。 |
+| novel-premise-alchemy | P0 | 新增通过 | 4.5 | 0 | 把灵感、题材、书名简介炼成一句话卖点、类型碰撞和读者承诺。 |
+| novel-payoff-architecture | P0 | 新增通过 | 4.6 | 0 | 把爽点拆成承诺、铺垫、延迟、兑现、代价和后果，避免自嗨。 |
+| novel-emotion-curve | P0 | 新增通过 | 4.5 | 0 | 设计压力、蓄势、兑现、缓冲、余波和转向，避免情绪直线。 |
+| novel-chapter-brief-builder | P0 | 新增通过 | 4.6 | 0 | 把 context 转成可执行章节作战简报，不直接写正文。 |
 | novel-atmospheric-triangulation | P1 | 复审通过 | 4.4 | 1 | 已补 `status` 字段，闭合氛围假设协议。 |
 | novel-confidence-decay | P1 | 复审通过，手动/参考 | 4.5 | 1 | 已强制保留 level/evidence/ttl/status/can_enter_decision_log；常规路径由各技能引用安全协议处理。 |
 | novel-intentional-ambiguity | P1 | 通过 | 4.5 | 0 | 留白保护范围和禁区可执行。 |
 | novel-retcon-debt | P1 | 复审通过 | 4.4 | 1 | 已补 severity 标尺和 10 章阈值，并修回 `accepted_solution`。 |
-| novel-style-miner | P1 | 复审通过 | 4.4 | 1 | 已修正 `candidate_only` 协议值。 |
-| novel-style-evolution | P1 | 复审通过 | 4.6 | 1 | 已补适用范围、证据、过度使用风险和确认字段。 |
+| novel-style-miner | P1 | 复审通过 | 4.5 | 1 | 已修正 `candidate_only` 协议值，并增加掉书袋/工业化证据提取。 |
+| novel-style-evolution | P1 | 复审通过 | 4.6 | 1 | 已补适用范围、证据、过度使用风险、反工业化候选和确认字段。 |
 | novel-weekly-alignment | P1 | 通过 | 4.4 | 0 | 对齐目标明确，避免流水账。 |
 | novel-discarded-resonance | P2 | 新合并入口 | 4.4 | 0 | 合并废案记录与亡灵伏笔唤醒，分 record/resonate 两个 branch。 |
 | novel-discarded-brilliance | P2 | 通过，手动/参考 | 4.3 | 0 | 已被 `novel-discarded-resonance` 覆盖，保留旧入口给显式调用和历史引用。 |
 | novel-ghost-premise-resonator | P2 | 通过，手动/参考 | 4.3 | 0 | 已被 `novel-discarded-resonance` 覆盖，保留旧入口给显式调用和历史引用。 |
-| novel-long-memory-maintenance | P2 | 新合并入口 | 4.5 | 0 | 合并地质分层与完结卷硬化，分 stratify/harden 两个 branch。 |
+| novel-long-memory-maintenance | P2 | 通过，手动/参考 | 4.5 | 0 | 合并地质分层与完结卷硬化，分 stratify/harden 两个 branch；低频维护不占自动入口。 |
 | novel-geological-stratification | P2 | 通过，手动/参考 | 4.4 | 0 | 已被 `novel-long-memory-maintenance` 覆盖，保留旧入口给显式调用和历史引用。 |
 | novel-memory-hardening | P2 | 复审通过，手动/参考 | 4.5 | 1 | 已被 `novel-long-memory-maintenance` 覆盖；保留 hardening 输出模板和历史引用。 |
-| novel-bottleneck-finder | P2 | 通过 | 4.4 | 0 | 已要求推荐下一技能使用精确技能 ID。 |
-| novel-exemplar-learning | P1 | 通过 | 4.5 | 0 | 投喂优秀样本，只提炼可迁移技法，不复制内容或写入 canon。 |
-| novel-learning-transfer | P1 | 通过 | 4.5 | 0 | 把学习摘要迁移为当前项目约束、练习或 variant brief。 |
+| novel-bottleneck-finder | P2 | 通过 | 4.5 | 0 | 已要求推荐下一技能使用精确技能 ID，并识别题材、爽点和情绪曲线瓶颈。 |
+| novel-exemplar-learning | P1 | 通过 | 4.6 | 0 | 投喂优秀样本，拆解承诺-延迟-兑现、情绪机制和可迁移技法，不复制内容。 |
+| novel-learning-transfer | P1 | 通过 | 4.6 | 0 | 把学习摘要迁移为题材炼金、爽点架构、情绪曲线、章节 brief 或 variant brief。 |
 
 ## 主控验收结论
 
-- 24 个技能均具有 `name` 和 `description` frontmatter。
-- 7 个低频、协议型或已合并旧入口已设置 `disable-model-invocation: true`。
-- 所有技能均声明中文网文场景、输出协议和禁止直接写正史。
-- 需要 references 的 5 个技能 已提供对应参考文件。
+- 28 个技能均具有 `name` 和 `description` frontmatter。
+- 8 个低频、协议型或已合并旧入口已设置 `disable-model-invocation: true`。
+- 技能体系已从单纯中文网文工作流升级为“商业连载叙事系统”：题材炼金、真实爽点、情绪曲线、章节 brief、记忆协议共同工作。
+- 所有技能均声明输出协议和禁止直接写正史。
+- 共享协议新增 `commercial-storycraft-protocol.md`，作为套路包装、人性爽点、情绪波形和反工业化的单一来源。
 - P0、P1、P2 和抽样前测均已复审通过；后续如 CLI 协议变化，再按同一闭环打回重写。

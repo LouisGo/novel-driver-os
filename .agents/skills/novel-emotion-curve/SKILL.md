@@ -13,6 +13,7 @@ description: Emotion Curve / 情绪曲线；用于规划或审查章节、桥段
 
 - 目标章节、桥段、大纲或最近章节质量趋势。
 - 当前卷目标、上一章结尾、本章预期钩子。
+- `../_shared/author-facing-language-protocol.md`。
 - `../_shared/commercial-storycraft-protocol.md`。
 - 如审查正文，读 `../novel-human-chapter-intake/references/chapter-quality-rubric.md`。
 
@@ -34,7 +35,21 @@ description: Emotion Curve / 情绪曲线；用于规划或审查章节、桥段
 
 ## 输出
 
-输出 `emotion_curve_report`：
+面向作者时输出“情绪节奏草案”或“情绪节奏审查”，不要把 `emotion_curve_report` 当标题。必须使用作者态结构：
+
+- `【类型】情绪节奏草案` 或 `【类型】情绪节奏审查`
+- `【状态】未确认`
+- `【入库】不会写入正史资料，需要你确认后才可进入长期资料`
+- `【用途】用于安排压力、蓄势、兑现、缓冲和章末转向`
+- `【一句话锚点】`：先说明本段或本章的情绪波形。
+- `【当前问题】`：如连续解释、持续受虐、持续开挂或平路。
+- `【推荐曲线】`：按 `【压力】`、`【蓄势】`、`【兑现】`、`【缓冲】`、`【转向】` 展开。
+- `【读者感受】`：说明每个节点希望读者产生的情绪。
+- `【章末钩子】`：说明结尾把期待转向哪里。
+- `【需要你确认】`：列出不超过 5 个会改变节奏写法的开关。
+- `【下一步】`：指向爽点设计、章节作战简报或改稿动作。
+
+内部登记时可保存 `emotion_curve_report`：
 
 - `source_input_id`
 - `target_scope`

@@ -74,6 +74,15 @@ raw -> triaged -> routed -> processed -> pending_confirmation -> approved_pendin
 
 route 会给出 `agent: use novel-premise-alchemy`、`novel-payoff-architecture`、`novel-emotion-curve` 或 `novel-chapter-brief-builder`，随后登记 storycraft artifact。
 
+世界观输入先走世界观草案，不直接写入长期资料。典型输入包括：
+
+- “我想先把世界观定下来”
+- “这个世界的力量体系怎么定？”
+- “帮我整理宗门、王朝、星际势力格局”
+- `#世界观 #设定`
+
+route 会先给出 `agent: use novel-world-contract-builder`，产出带 `【类型】`、`【状态】`、`【入库】`、`【一句话锚点】`、`【需要你确认】` 的作者态结构草案。作者确认后，才用 `novel propose <project> <inputId> --kind worldbuilding` 生成待确认补丁。
+
 `learning_sample` 用于“投喂优秀样本”。典型输入包括：
 
 - “这段写得好，帮我学习它的节奏”

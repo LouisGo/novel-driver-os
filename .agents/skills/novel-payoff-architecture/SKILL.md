@@ -13,6 +13,7 @@ description: Payoff Architecture / 爽点架构；用于设计或审查升级、
 
 - 目标 premise、章节 brief、outline、正文片段或读者反馈。
 - `10_bible/book_profile.yaml`、`30_plot/unresolved_hooks.md`、相关人物状态。
+- `../_shared/author-facing-language-protocol.md`。
 - `../_shared/commercial-storycraft-protocol.md`。
 - `../_shared/canon-safety-protocol.md`。
 
@@ -35,7 +36,21 @@ description: Payoff Architecture / 爽点架构；用于设计或审查升级、
 
 ## 输出
 
-输出 `payoff_architecture_report`：
+面向作者时输出“爽点设计草案”或“爽点审查报告”，不要把 `payoff_architecture_report` 当标题。必须使用作者态结构：
+
+- `【类型】爽点设计草案` 或 `【类型】爽点审查报告`
+- `【状态】未确认`
+- `【入库】不会写入正史资料，需要你确认后才可进入长期资料`
+- `【用途】用于确定承诺、铺垫、兑现、代价和后果`
+- `【一句话锚点】`：先说明本次爽点要满足的读者情绪回报。
+- `【情绪承诺】`：读者为什么会期待这个回报。
+- `【爽点链条】`：按 `【铺垫】`、`【压力】`、`【主角行动】`、`【延迟】`、`【兑现】`、`【余波】` 展开。
+- `【代价和后果】`：说明主角得到什么、失去什么、局面如何改变。
+- `【反自嗨检查】`：标出是否靠降智、外挂、旁白宣布爽。
+- `【需要你确认】`：列出不超过 5 个会改变爽点写法的开关。
+- `【下一步】`：指向情绪节奏、章节作战简报或待确认提案。
+
+内部登记时可保存 `payoff_architecture_report`：
 
 - `source_input_id`
 - `target_scope`

@@ -177,6 +177,16 @@ test("multi-intent input, outline route and non-chapter proposal enter review lo
     assert(route.route_plan.next_commands.includes(`agent: use novel-emotion-curve for black_tower ${outlinePacket.input_id}`));
     assert(route.route_plan.next_commands.includes(`novel propose black_tower ${outlinePacket.input_id} --kind outline`));
 
+    const worldPath = path.join(root, "world.md");
+    await fs.writeFile(worldPath, "#black_tower #世界观 #候选\n星图是修炼经脉，宗门垄断公开航线。\n", "utf8");
+    const worldPacket = await ingestInput("black_tower", worldPath);
+    const worldRoute = await routeInput("black_tower", worldPacket.input_id);
+    assert.equal(worldRoute.route_plan.primary_route, "world_contract_builder");
+    assert(worldRoute.route_plan.blocked_by.includes("agent_skill_required_novel_world_contract_builder"));
+    assert(worldRoute.route_plan.responsible_roles.includes("World Contract Builder"));
+    assert(worldRoute.route_plan.next_commands.includes(`agent: use novel-world-contract-builder for black_tower ${worldPacket.input_id}`));
+    assert(worldRoute.route_plan.next_commands.includes(`novel propose black_tower ${worldPacket.input_id} --kind worldbuilding`));
+
     const proposal = await createMemoryProposal("black_tower", outlinePacket.input_id, "outline");
     assert.equal(proposal.kind, "outline");
     assert.equal((await listReviewQueue("black_tower")).some((item) => item.input_id === outlinePacket.input_id), true);

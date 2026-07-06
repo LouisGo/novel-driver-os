@@ -31,7 +31,8 @@ description: Route / 输入路由；用于把已有 AuthorInputPacket 分配到 
 - `chapter_quality_review` / `opening_review` -> `novel-human-chapter-intake`，并要求读取 `chapter-quality-rubric.md`。
 - `style_review` / `ai_flavor_review` -> `novel-style-miner`；如涉及全章是否好看，同时 secondary route 到 `novel-human-chapter-intake`。
 - 重要正文接入 -> 在 `novel-human-chapter-intake` 产出稳定事实提取后，再进入 `novel-creative-intake-capsule`；不得跳过人工章节接入。
-- `character` / `setting` / `worldbuilding` / `outline` -> `novel-memory-patch`，必要时先 `novel-canon-checker`。
+- `worldbuilding` / 新世界观 / 底层规则 / 力量体系 / 势力格局 -> 先 `novel-world-contract-builder` 输出世界观草案；作者确认后再转 `novel-memory-patch`。
+- `character` / `setting` / 已确认的世界观细节 / `outline` -> `novel-memory-patch`，必要时先 `novel-canon-checker`。
 - `ambiguity` -> `novel-intentional-ambiguity`。
 - `style_feedback` -> `novel-style-miner` 或 `novel-style-evolution`。
 - `learning_sample` / 优秀样本投喂 -> `novel-exemplar-learning`；如要用于当前章节或比稿，secondary route 到 `novel-learning-transfer`。

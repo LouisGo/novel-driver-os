@@ -1,6 +1,6 @@
 ---
 name: novel-routing
-description: 中文网文输入路由技能。用于根据作者输入包 将正文、人设、设定、大纲、留白、文风反馈、优秀样本投喂、废案、AI 稿反馈、读者反馈、章节质量审稿请求、开头吸引力审稿请求等输入分配到 intake、记忆补丁、style、learning、ambiguity、debt、alignment、chapter quality review 或 archive 处理链路；不执行具体写作。
+description: Route / 输入路由；用于把已有 AuthorInputPacket 分配到 intake、propose、style、learning、ghost、alignment 等下一节点，输出 route_plan、responsible_roles、blocked_by 和 next_commands；不执行目标技能工作。
 ---
 
 # 输入路由
@@ -13,6 +13,8 @@ description: 中文网文输入路由技能。用于根据作者输入包 将正
 
 - 目标 作者输入包。
 - `project.yaml`。
+- `../_shared/canon-safety-protocol.md`。
+- 当前字段必须对齐 `src/route.ts` 的 `RoutePlan` 接口。
 - 如涉及正文：相关 `01_intake/` 是否已存在。
 - 如涉及正史：`10_bible/open_questions.md` 和目标实体文件。
 
@@ -26,7 +28,7 @@ description: 中文网文输入路由技能。用于根据作者输入包 将正
 - `ambiguity` -> `novel-intentional-ambiguity`。
 - `style_feedback` -> `novel-style-miner` 或 `novel-style-evolution`。
 - `learning_sample` / 优秀样本投喂 -> `novel-exemplar-learning`；如要用于当前章节或比稿，secondary route 到 `novel-learning-transfer`。
-- `discarded_idea` -> `novel-discarded-brilliance`。
+- `discarded_idea` -> `novel-discarded-resonance` 的 record branch；后续扫描走 resonate branch 或 `novel ghost scan`。
 - 圆场方案 -> `novel-retcon-debt`。
 - 系统误解反馈 -> `novel-weekly-alignment`。
 
@@ -37,10 +39,12 @@ description: 中文网文输入路由技能。用于根据作者输入包 将正
 - `input_id`
 - `primary_route`
 - `secondary_routes`
+- `responsible_roles`
 - `blocked_by`
 - `confirmation_required`
 - `risk_notes`
 - `next_actions`
+- `next_commands`
 
 ## 禁止
 
@@ -57,7 +61,8 @@ description: 中文网文输入路由技能。用于根据作者输入包 将正
 
 ## 自检
 
-- 路由是否可执行？
+- `next_commands` 是否是作者或 agent 下一步能执行的具体 CLI 命令，或明确的 `agent:` 动作？
 - 是否列出阻塞项？
+- `blocked_by` 非空时，是否没有假装闭环？
 - 是否避免把候选设定直接导入正史？
 - 是否给作者留下确认入口？

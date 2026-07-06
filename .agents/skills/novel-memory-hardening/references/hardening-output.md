@@ -18,6 +18,9 @@
 - 不把候选写成 confirmed。
 - 怪诞细节宁可多保留，不要被摘要清洗掉。
 - 摘要要服务后续写作，不是读后感。
+- 每个正式硬化输出必须带 `archive_path` 和 `context_policy`。
+- `context_policy` 必须说明：默认是否进入 `novel context build`、何时只作 deep archive、哪些候选不得进入上下文。
+- 出现 `Pending manual selection`、`MVP placeholder`、`No source snippets found` 时，正式硬化不通过，改输出 `partial_hardening_report`。
 
 ## partial_hardening_report
 
@@ -32,4 +35,6 @@ usable_sources: []
 safe_partial_outputs: []
 next_collection_actions: []
 source_refs: []
+blocked_by: []
+next_commands: []
 ```

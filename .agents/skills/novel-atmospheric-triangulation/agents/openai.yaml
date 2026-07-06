@@ -1,0 +1,3 @@
+interface:
+  display_name: "氛围三角验证"
+  short_description: "为章节生成三种有原文证据的氛围假设"

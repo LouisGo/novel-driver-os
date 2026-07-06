@@ -1,0 +1,3 @@
+interface:
+  display_name: "长篇地质分层"
+  short_description: "管理热层、温层、冷层和深档案的长篇记忆"

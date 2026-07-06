@@ -1,0 +1,3 @@
+interface:
+  display_name: "记忆补丁"
+  short_description: "生成或审查不能直接入正史的长期记忆补丁"

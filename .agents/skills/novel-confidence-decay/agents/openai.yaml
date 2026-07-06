@@ -1,0 +1,3 @@
+interface:
+  display_name: "意图置信衰减"
+  short_description: "管理意图假设等级、TTL、衰减和归档"

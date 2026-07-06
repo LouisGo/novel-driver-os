@@ -1,0 +1,3 @@
+interface:
+  display_name: "人工章节接入"
+  short_description: "接住作者正文并提取事实、钩子、风险和候选"

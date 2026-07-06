@@ -1,0 +1,3 @@
+interface:
+  display_name: "输入路由"
+  short_description: "决定中文网文输入应进入哪条处理链路"

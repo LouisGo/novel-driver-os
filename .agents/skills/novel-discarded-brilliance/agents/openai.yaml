@@ -1,0 +1,3 @@
+interface:
+  display_name: "废案资产记录"
+  short_description: "记录废案、舍弃原因、潜在价值和复活触发"

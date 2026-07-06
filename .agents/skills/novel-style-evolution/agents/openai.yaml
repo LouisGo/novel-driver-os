@@ -1,0 +1,3 @@
+interface:
+  display_name: "文风演化管理"
+  short_description: "管理稳定风格、目标风格、反风格和实验空间"

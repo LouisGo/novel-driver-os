@@ -1,0 +1,3 @@
+interface:
+  display_name: "文风候选提取"
+  short_description: "从作者输入、修改和反馈中提取中文网文文风候选"

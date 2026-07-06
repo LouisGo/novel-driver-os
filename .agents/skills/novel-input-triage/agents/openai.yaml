@@ -1,0 +1,3 @@
+interface:
+  display_name: "中文网文输入分流"
+  short_description: "识别作者输入类型、权威等级、目标范围和确认需求"

@@ -1,0 +1,3 @@
+interface:
+  display_name: "圆场债务"
+  short_description: "记录圆场补丁、设定偏移和连续性修补风险"

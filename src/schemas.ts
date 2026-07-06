@@ -20,6 +20,7 @@ export const InputTypeSchema = z.enum([
   "inspiration",
   "chapter",
   "fragment",
+  "book_profile",
   "outline",
   "setting",
   "character",

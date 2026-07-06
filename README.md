@@ -105,7 +105,7 @@ printf '#black_tower #大纲 #候选\n第一卷：主角进入学馆。' | novel
 MVP 支持这些轻标记：
 
 ```text
-#项目名 #灵感 #正文 #设定 #人设 #世界观 #大纲 #留白 #文风 #废案 #反馈 #重写 #变体
+#项目名 #书名 #简介 #灵感 #正文 #设定 #人设 #世界观 #大纲 #留白 #文风 #废案 #反馈 #重写 #变体
 #ch50 #候选 #正史 #正稿 #暂存 #不要入库
 ```
 
@@ -170,6 +170,17 @@ raw -> triaged -> routed -> pending_confirmation -> applied / archived / ignored
 - `patch apply` 只应用已 approve 的 `memory_patch.yaml`，并在应用前自动创建 snapshot。
 - 关键动作会追加到项目根目录 `trace.jsonl`，用于 GUI 活动流和断点恢复。
 
+## Book Profile
+
+书名和小说简介是一等项目资料，写入 `10_bible/book_profile.yaml`，会参与导出命名和 context packet。
+
+```bash
+novel book set black_tower --title "黑塔" --synopsis "一个雨夜里的长篇玄幻故事。" --genre "玄幻" --tags "升级流,悬疑" --json
+novel book show black_tower --json
+```
+
+如果作者输入里出现 `#书名`、`#简介`、`作品简介`、`一句话简介` 等语义，系统会 route 到 book profile 链路，由作者确认后更新。
+
 ## Chapter Accept / Export
 
 章节通过 review 后，可以进入定稿层：
@@ -181,8 +192,9 @@ novel export chapters black_tower --format txt --zip ./black_tower.zip --json
 ```
 
 - `chapter accept` 写入 `50_chapters/hot|warm|cold/<chapter>.txt`。
-- `50_chapters/chapter_index.yaml` 维护排序和来源。
+- `50_chapters/chapter_index.yaml` 维护排序、来源、章节标题和导出文件名。
 - `export chapters` 只导出 accepted hot chapters，并按 chapter index 排序。
+- 默认导出路径使用中文书名：`exports/<书名>_txt/0001.第一章 标题.txt` 和 `exports/<书名>.zip`。
 
 ## Variant Compare
 

@@ -27,6 +27,7 @@ Creator Input Layer
 - `00_inbox/reviews/` 保存作者确认、拒绝或归档决策。
 - `01_intake/` 保存系统理解和候选记忆补丁。
 - `10_bible/` 面向长期正史，但 MVP 不让 AI 直接写入。
+- `10_bible/book_profile.yaml` 保存书名、简介、题材和标签，供 context 和导出命名使用。
 - `50_chapters/` 保存 accepted chapter 层、chapter index 和 variants。
 - `80_context/` 保存为下一步任务组装的上下文包。
 - `90_archive/snapshots/` 保存可恢复快照。

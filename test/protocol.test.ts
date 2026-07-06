@@ -22,6 +22,7 @@ import { exportChapters } from "../src/exporter.js";
 import { compareVariants, decideVariant, registerVariant } from "../src/variant.js";
 import { createSnapshot, restoreSnapshot } from "../src/snapshot.js";
 import { getSessionStatus, pauseSession, resumeSession } from "../src/session.js";
+import { setBookProfile } from "../src/book.js";
 
 test("validator rejects intention and retcon debt protocol violations", { concurrency: false }, async () => {
   await withProject(async (root) => {
@@ -192,6 +193,12 @@ test("multi-intent input, outline route and non-chapter proposal enter review lo
 
 test("chapter accept writes sorted index and export copies accepted hot chapters", { concurrency: false }, async () => {
   await withProject(async (root) => {
+    await setBookProfile("black_tower", {
+      title: "黑塔",
+      synopsis: "一部关于雨夜与黑塔的长篇小说。",
+      genre: "玄幻",
+      tags: ["测试"],
+    });
     const first = await ingestChapter(root, "ch1.md", "#black_tower #正文 #ch1 #正稿\n# 第一章\n她没有回头，只是把伞往他那边偏了半寸。\n\n“你最好别死。”\n");
     await createChapterIntake("black_tower", first.input_id);
     await decideReview("black_tower", first.input_id, "approve", "accept chapter");
@@ -205,7 +212,11 @@ test("chapter accept writes sorted index and export copies accepted hot chapters
     const outDir = path.join(root, "exported");
     const exported = await exportChapters("black_tower", { format: "txt", out: outDir });
     assert.equal(exported.exported_files.length, 1);
-    assert.match(await fs.readFile(path.join(outDir, "ch0001.txt"), "utf8"), /你最好别死/);
+    assert.match(await fs.readFile(path.join(outDir, "0001.第一章.txt"), "utf8"), /你最好别死/);
+
+    const defaultExport = await exportChapters("black_tower", { format: "txt" });
+    assert(defaultExport.exported_files.some((file) => file.endsWith("exports/黑塔_txt/0001.第一章.txt")));
+    assert.equal(defaultExport.zip_file?.endsWith("exports/黑塔.zip"), true);
 
     const result = await validateProject("black_tower");
     assert.equal(result.ok, true, result.errors.join("\n"));

@@ -90,6 +90,15 @@ AI 不能直接修改本文件。所有正史变更必须先进入 memory_patch.
 _No confirmed canon yet._
 `);
 
+  await writeYaml(path.join(root, "10_bible/book_profile.yaml"), {
+    title: projectName,
+    synopsis: "",
+    genre: null,
+    tags: [],
+    source_input: null,
+    updated_at: nowIso(),
+  });
+
   await writeText(path.join(root, "10_bible/world_contract.md"), `# World Contract
 
 记录世界运行规则、能力边界、代价和不可违反的约束。

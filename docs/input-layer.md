@@ -7,6 +7,7 @@
 - `inspiration`
 - `chapter`
 - `fragment`
+- `book_profile`
 - `outline`
 - `setting`
 - `character`
@@ -22,7 +23,7 @@
 轻标记可以降低误判：
 
 ```text
-#灵感 #正文 #设定 #人设 #世界观 #大纲 #留白 #文风 #废案 #反馈 #重写 #变体
+#书名 #简介 #灵感 #正文 #设定 #人设 #世界观 #大纲 #留白 #文风 #废案 #反馈 #重写 #变体
 #ch50 #候选 #正史 #正稿 #暂存 #不要入库
 ```
 
@@ -56,3 +57,5 @@ raw -> triaged -> routed -> processed -> pending_confirmation -> approved_pendin
 ```
 
 `detected_type` 是主路由，`detected_intents` 保留多意图。比如 `#文风 #反馈` 可以主路由到 style candidate，同时保留 alignment feedback 意图。
+
+书名、小说简介、题材标签属于 `book_profile`，由 `novel book set` 更新 `10_bible/book_profile.yaml`，不混入普通大纲或世界观。

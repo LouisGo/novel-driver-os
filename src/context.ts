@@ -12,6 +12,7 @@ export async function buildContextPacket(projectName: string, chapter: string): 
   const shortTermTentativeVibes = await shortTermTentativeVibeFiles(root, chapter);
   const sections: Array<{ title: string; files: string[] }> = [
     { title: "Project", files: ["project.yaml"] },
+    { title: "Book Profile", files: ["10_bible/book_profile.yaml"] },
     { title: "Canon Registry", files: ["10_bible/canon_registry.md"] },
     { title: "Intentional Ambiguity", files: ["10_bible/intentional_ambiguity.md"] },
     { title: "Open Questions", files: ["10_bible/open_questions.md"] },

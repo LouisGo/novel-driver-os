@@ -22,6 +22,7 @@ import { compareVariants, decideVariant, registerVariant } from "./variant.js";
 import { getSessionStatus, pauseSession, resumeSession } from "./session.js";
 import { createSnapshot, restoreSnapshot } from "./snapshot.js";
 import { initProjectGit } from "./project-git.js";
+import { setBookProfile, showBookProfile } from "./book.js";
 
 const program = new Command();
 
@@ -84,6 +85,48 @@ program
     }
     console.log(`Created ${result.kind} proposal for ${inputId}`);
     console.log(`next: ${result.next_commands.join(" && ")}`);
+  }));
+
+const book = program.command("book").description("Book profile commands.");
+
+book
+  .command("set")
+  .argument("<projectName>")
+  .requiredOption("--title <title>")
+  .requiredOption("--synopsis <synopsis>")
+  .option("--genre <genre>")
+  .option("--tags <tags>", "Comma-separated tags.")
+  .option("--source-input <inputId>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Set the book title and synopsis used by export and context.")
+  .action(wrap(async (projectName: string, options: { title: string; synopsis: string; genre?: string; tags?: string; sourceInput?: string; json?: boolean }) => {
+    const result = await setBookProfile(projectName, {
+      title: options.title,
+      synopsis: options.synopsis,
+      genre: options.genre ?? null,
+      tags: options.tags ? options.tags.split(",").map((item) => item.trim()).filter(Boolean) : [],
+      sourceInput: options.sourceInput ?? null,
+    });
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`Book title: ${result.profile.title}`);
+  }));
+
+book
+  .command("show")
+  .argument("<projectName>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Show the current book profile.")
+  .action(wrap(async (projectName: string, options: { json?: boolean }) => {
+    const result = await showBookProfile(projectName);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`title: ${result.profile.title}`);
+    console.log(`synopsis: ${result.profile.synopsis || "-"}`);
   }));
 
 program
@@ -349,7 +392,7 @@ exportCommand
   .option("--out <dir>")
   .option("--zip <file>")
   .option("--json", "Print machine-readable JSON.")
-  .description("Export accepted hot chapters in chapter_index order.")
+  .description("Export accepted hot chapters in chapter_index order. Defaults to Chinese book-title paths under exports/.")
   .action(wrap(async (projectName: string, options: { format: string; out?: string; zip?: string; json?: boolean }) => {
     const result = await exportChapters(projectName, options);
     if (options.json) {

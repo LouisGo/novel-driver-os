@@ -237,6 +237,7 @@ function detectIntents(rawText: string, tags: Set<string>): InputType[] {
   if (tags.has("废案")) add("discarded_idea");
   if (tags.has("变体") || tags.has("版本")) add("chapter_variant");
   if (tags.has("重写") || tags.has("改写") || tags.has("比稿")) add("rewrite_request");
+  if (tags.has("书名") || tags.has("简介") || tags.has("小说简介")) add("book_profile");
   if (tags.has("正文")) add(rawText.length > 160 || detectChapter(tags, rawText) ? "chapter" : "fragment");
   if (tags.has("文风")) add("style_feedback");
   if (tags.has("留白")) add("ambiguity");
@@ -249,6 +250,7 @@ function detectIntents(rawText: string, tags: Set<string>): InputType[] {
 
   if (/废案|舍弃|不要用/.test(rawText)) add("discarded_idea");
   if (/重写|改写|比稿|另写[一二三四五六七八九十\d]+版|多个版本|N\s*个版本/i.test(rawText)) add("rewrite_request");
+  if (/书名|小说名|简介|一句话简介|作品简介|文案/.test(rawText)) add("book_profile");
   if (/文风|语气|笔触|AI味/.test(rawText)) add("style_feedback");
   if (/留白|暂时不要解释|不要说破/.test(rawText)) add("ambiguity");
   if (/第一卷|卷目标|大纲|章节规划|剧情编排|剧情走向/.test(rawText)) add("outline");
@@ -305,6 +307,7 @@ function interpretationsFor(type: InputType, entity: string | null, chapter: str
     inspiration: "这更像一条灵感碎片，适合进入候选池或 open_questions。",
     chapter: "这更像作者亲写章节，适合进入 Human Chapter Intake。",
     fragment: "这更像正文片段，适合进入 Human Chapter Intake 但需要作者确认范围。",
+    book_profile: "这更像书名、题材或小说简介输入，适合更新 book profile。",
     outline: "这更像卷级或章节级大纲，适合生成 plot memory patch proposal。",
     setting: "这更像设定想法，适合生成 memory patch proposal。",
     character: "这更像人设候选，尤其不能直接写入角色正史。",
@@ -326,6 +329,7 @@ function recommendedActionsFor(type: InputType, authority: string, status: Input
     inspiration: ["add_to_inspiration_candidates", "review_in_weekly_alignment"],
     chapter: ["run_human_chapter_intake", "generate_creative_intake_capsule"],
     fragment: ["run_human_chapter_intake", "ask_author_for_scope"],
+    book_profile: ["set_book_profile", "ask_author_confirmation"],
     outline: ["generate_outline_memory_patch", "ask_author_confirmation"],
     setting: ["generate_memory_patch_candidate", "ask_author_confirmation"],
     character: ["add_to_character_candidates", "ask_author_confirmation"],

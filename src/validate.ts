@@ -35,6 +35,7 @@ export async function validateProject(projectName: string): Promise<ValidationRe
 
   await validateYamlFile(path.join(root, "project.yaml"), ProjectSchema.parse, errors);
   await validateYamlFile(path.join(root, "70_debt/retcon_debt.yaml"), RetconDebtSchema.parse, errors);
+  await validateBookProfile(root, path.join(root, "10_bible/book_profile.yaml"), errors);
   await validateChapterIndex(root, path.join(root, "50_chapters/chapter_index.yaml"), errors);
   await validateSessionLedger(root, path.join(root, "session.yaml"), errors);
 
@@ -128,6 +129,18 @@ export async function validateProject(projectName: string): Promise<ValidationRe
   await validateTraceFile(root, path.join(root, "trace.jsonl"), errors);
 
   return { ok: errors.length === 0, errors };
+}
+
+async function validateBookProfile(root: string, filePath: string, errors: string[]): Promise<void> {
+  if (!(await pathExists(filePath))) return;
+  try {
+    const value = await readYaml(filePath);
+    if (!isRecord(value) || typeof value.title !== "string" || typeof value.synopsis !== "string") {
+      errors.push(`${relative(root, filePath)} must contain title and synopsis`);
+    }
+  } catch (error) {
+    errors.push(`Invalid ${relative(root, filePath)}: ${(error as Error).message}`);
+  }
 }
 
 export function formatValidation(result: ValidationResult): string {

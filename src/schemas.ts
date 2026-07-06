@@ -27,6 +27,7 @@ export const InputTypeSchema = z.enum([
   "worldbuilding",
   "ambiguity",
   "style_feedback",
+  "learning_sample",
   "discarded_idea",
   "rewrite_request",
   "chapter_variant",

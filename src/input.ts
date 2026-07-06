@@ -238,6 +238,7 @@ function detectIntents(rawText: string, tags: Set<string>): InputType[] {
   if (tags.has("变体") || tags.has("版本")) add("chapter_variant");
   if (tags.has("重写") || tags.has("改写") || tags.has("比稿")) add("rewrite_request");
   if (tags.has("书名") || tags.has("简介") || tags.has("小说简介")) add("book_profile");
+  if (tags.has("样本") || tags.has("学习") || tags.has("投喂") || tags.has("参考")) add("learning_sample");
   if (tags.has("正文")) add(rawText.length > 160 || detectChapter(tags, rawText) ? "chapter" : "fragment");
   if (tags.has("文风")) add("style_feedback");
   if (tags.has("留白")) add("ambiguity");
@@ -251,6 +252,7 @@ function detectIntents(rawText: string, tags: Set<string>): InputType[] {
   if (/废案|舍弃|不要用/.test(rawText)) add("discarded_idea");
   if (/重写|改写|比稿|另写[一二三四五六七八九十\d]+版|多个版本|N\s*个版本/i.test(rawText)) add("rewrite_request");
   if (/书名|小说名|简介|一句话简介|作品简介|文案/.test(rawText)) add("book_profile");
+  if (/投喂|学习这个|学习这段|写得好|优秀样本|参考样本|消化.*吸收|我想学/.test(rawText)) add("learning_sample");
   if (/文风|语气|笔触|AI味/.test(rawText)) add("style_feedback");
   if (/留白|暂时不要解释|不要说破/.test(rawText)) add("ambiguity");
   if (/第一卷|卷目标|大纲|章节规划|剧情编排|剧情走向/.test(rawText)) add("outline");
@@ -314,6 +316,7 @@ function interpretationsFor(type: InputType, entity: string | null, chapter: str
     worldbuilding: "这更像世界观想法，适合与 world_contract 对齐。",
     ambiguity: "这更像有意留白，应保护为 intentional ambiguity。",
     style_feedback: "这更像文风反馈，适合进入 style candidate。",
+    learning_sample: "这更像外部优秀样本投喂，应先提炼可迁移技法，不能进入正史。",
     discarded_idea: "这更像废案或被舍弃灵感，应进入 discarded brilliance 候选。",
     rewrite_request: "这更像重写或比稿请求，应进入 variant workflow。",
     chapter_variant: "这更像章节候选变体，应登记为 variant，而不是直接覆盖正稿。",
@@ -336,6 +339,7 @@ function recommendedActionsFor(type: InputType, authority: string, status: Input
     worldbuilding: ["generate_world_contract_patch_candidate", "ask_author_confirmation"],
     ambiguity: ["add_to_intentional_ambiguity_candidate", "protect_from_auto_explanation"],
     style_feedback: ["generate_style_candidate", "review_in_weekly_alignment"],
+    learning_sample: ["run_exemplar_learning", "extract_transferable_techniques"],
     discarded_idea: ["append_discarded_brilliance_candidate", "record_resurrection_triggers"],
     rewrite_request: ["register_or_generate_variants", "compare_variants"],
     chapter_variant: ["register_chapter_variant", "compare_variants"],

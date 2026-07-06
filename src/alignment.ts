@@ -71,6 +71,7 @@ function countInputs(packets: AuthorInputPacket[]): Record<string, number> {
     worldbuilding: 0,
     ambiguity: 0,
     style_feedback: 0,
+    learning_sample: 0,
     discarded_idea: 0,
     feedback: 0,
     unknown: 0,

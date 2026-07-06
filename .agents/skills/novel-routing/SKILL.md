@@ -1,6 +1,6 @@
 ---
 name: novel-routing
-description: 中文网文输入路由技能。用于根据作者输入包 将正文、人设、设定、大纲、留白、文风反馈、废案、AI 稿反馈、读者反馈、章节质量审稿请求、开头吸引力审稿请求等输入分配到 intake、记忆补丁、style、ambiguity、debt、alignment、chapter quality review 或 archive 处理链路；不执行具体写作。
+description: 中文网文输入路由技能。用于根据作者输入包 将正文、人设、设定、大纲、留白、文风反馈、优秀样本投喂、废案、AI 稿反馈、读者反馈、章节质量审稿请求、开头吸引力审稿请求等输入分配到 intake、记忆补丁、style、learning、ambiguity、debt、alignment、chapter quality review 或 archive 处理链路；不执行具体写作。
 ---
 
 # 输入路由
@@ -25,6 +25,7 @@ description: 中文网文输入路由技能。用于根据作者输入包 将正
 - `character` / `setting` / `worldbuilding` / `outline` -> `novel-memory-patch`，必要时先 `novel-canon-checker`。
 - `ambiguity` -> `novel-intentional-ambiguity`。
 - `style_feedback` -> `novel-style-miner` 或 `novel-style-evolution`。
+- `learning_sample` / 优秀样本投喂 -> `novel-exemplar-learning`；如要用于当前章节或比稿，secondary route 到 `novel-learning-transfer`。
 - `discarded_idea` -> `novel-discarded-brilliance`。
 - 圆场方案 -> `novel-retcon-debt`。
 - 系统误解反馈 -> `novel-weekly-alignment`。
@@ -51,6 +52,8 @@ description: 中文网文输入路由技能。用于根据作者输入包 将正
 ## 中文网文检查
 
 对“追读问题”“毒点反馈”“AI 味反馈”“章末钩子候选”“开头是否只围绕主角”“是否有人味”要路由到章节质量审稿、对齐或风格层，不要误判为普通设定。
+
+对“学习这个样本”“这段写得好”“想吸收这个章末/爽点/对白”的输入，不要路由成普通文风反馈；先做样本学习，明确 `non_transferable_elements` 和 `risk_if_copied`。
 
 ## 自检
 

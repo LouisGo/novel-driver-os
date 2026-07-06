@@ -105,7 +105,7 @@ printf '#black_tower #大纲 #候选\n第一卷：主角进入学馆。' | novel
 MVP 支持这些轻标记：
 
 ```text
-#项目名 #书名 #简介 #灵感 #正文 #设定 #人设 #世界观 #大纲 #留白 #文风 #废案 #反馈 #重写 #变体
+#项目名 #书名 #简介 #灵感 #正文 #设定 #人设 #世界观 #大纲 #留白 #文风 #样本 #学习 #投喂 #废案 #反馈 #重写 #变体
 #ch50 #候选 #正史 #正稿 #暂存 #不要入库
 ```
 
@@ -117,6 +117,33 @@ MVP 支持这些轻标记：
 
 “你最好别死。”
 ```
+
+## Exemplar Learning
+
+你可以把自己觉得写得好的章节、段落、开头、章末钩子、对白或爽点片段投喂给 Codex agent：
+
+```bash
+novel ingest black_tower ./good-sample.md --json
+novel route black_tower <inputId> --json
+```
+
+建议使用轻标记：
+
+```markdown
+#black_tower #样本 #学习
+这段我觉得好，想学习它的开头钩子、压迫感和对白节奏。
+<粘贴样本或节选>
+```
+
+`learning_sample` 不会进入 canon，也不会直接更新 style bible。route 会指向 `novel-exemplar-learning` skill，由 agent 提炼：
+
+- 可迁移技法
+- 读者情绪机制
+- 不能复制的人物、设定、桥段、专有名词和句式
+- 对当前项目的适配建议
+- 下一章或变体比稿可用的写作约束
+
+如果要把学习结果用于当前章节，继续使用 `novel-learning-transfer` skill 生成 `learning_transfer_plan`，再进入章节草稿、variant、review、accept 等既有 loop。
 
 ## Human Chapter Intake
 

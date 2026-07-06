@@ -303,6 +303,24 @@ test("discarded idea ingest feeds ghost scan candidates", { concurrency: false }
   });
 });
 
+test("learning sample routes to exemplar learning without entering canon", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const filePath = path.join(root, "sample.md");
+    await fs.writeFile(filePath, "#black_tower #样本 #学习\n这是一段我觉得写得好的网文开头样本，想投喂系统学习它的节奏、钩子和人味细节。\n", "utf8");
+    const packet = await ingestInput("black_tower", filePath);
+    assert.equal(packet.detected_type, "learning_sample");
+    assert(packet.detected_intents.includes("learning_sample"));
+    assert(packet.system_interpretation.some((item) => item.includes("不能进入正史")));
+
+    const route = await routeInput("black_tower", packet.input_id);
+    assert.equal(route.route_plan.primary_route, "exemplar_learning");
+    assert(route.route_plan.secondary_routes.includes("learning_transfer"));
+    assert(route.route_plan.responsible_roles.includes("Style Curator"));
+    assert(route.route_plan.blocked_by.includes("agent_skill_required_novel_exemplar_learning"));
+    assert(route.route_plan.next_commands.includes(`agent: use novel-exemplar-learning for black_tower ${packet.input_id}`));
+  });
+});
+
 async function withProject(run: (root: string) => Promise<void>): Promise<void> {
   await withTempCwd(async (root) => {
     await initProject("black_tower");

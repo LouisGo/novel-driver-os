@@ -14,6 +14,7 @@ Creator Input Layer
   -> Memory Patch Proposal
   -> Author Review Decision
   -> Patch Apply
+  -> Chapter Accept / Variant Compare / Export
   -> Weekly Alignment
   -> Context Assembler
 ```
@@ -26,7 +27,9 @@ Creator Input Layer
 - `00_inbox/reviews/` 保存作者确认、拒绝或归档决策。
 - `01_intake/` 保存系统理解和候选记忆补丁。
 - `10_bible/` 面向长期正史，但 MVP 不让 AI 直接写入。
+- `50_chapters/` 保存 accepted chapter 层、chapter index 和 variants。
 - `80_context/` 保存为下一步任务组装的上下文包。
+- `90_archive/snapshots/` 保存可恢复快照。
 - `trace.jsonl` 记录关键 CLI 状态变更，便于 GUI 和 agent 断点恢复。
 
 正史保护：
@@ -35,6 +38,8 @@ Creator Input Layer
 - `style_bible.md` 只能记录稳定确认过的风格。
 - `memory_patch.yaml` 是 proposal，不是事实本身。
 - `patch apply` 只能应用已经 `review decide --decision approve` 的补丁。
+- `chapter accept` 只能接受已 approve 或已 applied 的输入，variant 胜者也必须通过该入口进入章节层。
+- `snapshot restore` 不覆盖 raw inbox 和 trace，只恢复长期记忆、plot、style、chapters 和 manifests。
 
 GUI 约束：
 

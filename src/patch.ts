@@ -5,6 +5,7 @@ import { assertSafeId, projectRoot, relativeToProject } from "./paths.js";
 import { decideReview, readReviewDecision } from "./review.js";
 import { appendTrace } from "./trace.js";
 import { nowIso } from "./time.js";
+import { createSnapshot } from "./snapshot.js";
 
 export type PatchTarget = "all" | "canon" | "character" | "plot" | "style" | "ambiguity";
 
@@ -24,8 +25,8 @@ export async function applyMemoryPatch(projectName: string, inputId: string, tar
   if (packet.status === "applied") {
     throw new Error(`Input ${inputId} is already applied.`);
   }
-  if (packet.status !== "pending_confirmation") {
-    throw new Error(`Input ${inputId} is ${packet.status}; patch apply requires pending_confirmation.`);
+  if (!["pending_confirmation", "approved_pending_apply"].includes(packet.status)) {
+    throw new Error(`Input ${inputId} is ${packet.status}; patch apply requires approved_pending_apply.`);
   }
 
   const decision = await readReviewDecision(projectName, inputId);
@@ -45,6 +46,7 @@ export async function applyMemoryPatch(projectName: string, inputId: string, tar
   }
 
   const patchId = asString(memoryPatch.patch_id) ?? `patch_${inputId}`;
+  await createSnapshot(projectName, `before_patch_${inputId}`);
   const changed = await applyPatchTarget(projectName, inputId, patchId, memoryPatch, normalizedTarget);
   const appliedPath = path.join(root, "01_intake", inputId, "memory_patch_applied.yaml");
   await writeYaml(appliedPath, {

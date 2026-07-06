@@ -28,6 +28,8 @@ const PROJECT_DIRS = [
 const OPTIONAL_PROJECT_DIRS = [
   "00_inbox/routes",
   "00_inbox/reviews",
+  "50_chapters/variants",
+  "90_archive/snapshots",
 ];
 
 export const REQUIRED_PROJECT_DIRS = PROJECT_DIRS;
@@ -67,7 +69,7 @@ export async function initProject(projectName: string): Promise<string> {
     name: projectName,
     schema_version: "novel-driver-os/v0.1",
     created_at: nowIso(),
-    mode: "manual_first",
+    mode: "manual",
     canon_policy: {
       ai_may_modify_canon_directly: false,
       ai_outputs_are: ["candidate", "proposal", "patch", "report", "hypothesis"],
@@ -206,6 +208,18 @@ exploration_axes:
   - 更少解释的关系推进
 \`\`\`
 `);
+
+  await writeYaml(path.join(root, "50_chapters/chapter_index.yaml"), {
+    chapters: [],
+  });
+
+  await writeYaml(path.join(root, "session.yaml"), {
+    state: "active",
+    paused_at: null,
+    resumed_at: null,
+    note: null,
+    updated_at: nowIso(),
+  });
 
   await writeYaml(path.join(root, "70_debt/retcon_debt.yaml"), {
     current_arc_total: 0,

@@ -14,7 +14,7 @@ Novel Driver OS 是一个文件系统型网文创作副驾。它不是 AI 代写
 
 MVP 只实现手动档优先的文件协议。
 
-- Manual Mode：作者先写，系统后接。系统负责分类、提取、提醒和生成候选补丁。
+- Manual Mode：作者或 Codex agent 先写，系统后接。系统负责分类、提取、提醒、生成候选补丁、登记版本和导出章节。
 - Assisted Mode：未来用于局部扩写、桥段候选、风格候选，仍不定稿。
 - Auto Mode：本阶段只预留接口，不实现自动写作和自动发布。
 
@@ -92,6 +92,12 @@ novel list-inputs black_tower
 novel review-input black_tower <inputId>
 ```
 
+Codex App 直接输入可以走 stdin，不必先手写临时文件：
+
+```bash
+printf '#black_tower #大纲 #候选\n第一卷：主角进入学馆。' | novel ingest black_tower --stdin --source-actor agent --json
+```
+
 导入会复制原文到 `00_inbox/raw/`，并在 `00_inbox/triaged/` 生成 Author Input Packet。
 
 ## Light Tags
@@ -99,7 +105,7 @@ novel review-input black_tower <inputId>
 MVP 支持这些轻标记：
 
 ```text
-#项目名 #灵感 #正文 #设定 #人设 #世界观 #留白 #文风 #废案 #反馈
+#项目名 #灵感 #正文 #设定 #人设 #世界观 #大纲 #留白 #文风 #废案 #反馈 #重写 #变体
 #ch50 #候选 #正史 #正稿 #暂存 #不要入库
 ```
 
@@ -159,9 +165,53 @@ raw -> triaged -> routed -> pending_confirmation -> applied / archived / ignored
 ```
 
 - `route` 生成 `00_inbox/routes/<inputId>.route.yaml`，并给出可执行 `next_commands`。
-- `review decide` 只记录作者决策，不写正史。
-- `patch apply` 只应用已 approve 的 `memory_patch.yaml`。
+- 非章节输入可用 `novel propose <project> <inputId> --kind character|setting|worldbuilding|outline|ambiguity` 生成 memory patch proposal。
+- `review decide` 只记录作者决策，不写正史；approve 后状态进入 `approved_pending_apply`。
+- `patch apply` 只应用已 approve 的 `memory_patch.yaml`，并在应用前自动创建 snapshot。
 - 关键动作会追加到项目根目录 `trace.jsonl`，用于 GUI 活动流和断点恢复。
+
+## Chapter Accept / Export
+
+章节通过 review 后，可以进入定稿层：
+
+```bash
+novel chapter accept black_tower <inputId> --chapter ch0001 --layer hot --json
+novel export chapters black_tower --format txt --out ./exports/black_tower --json
+novel export chapters black_tower --format txt --zip ./black_tower.zip --json
+```
+
+- `chapter accept` 写入 `50_chapters/hot|warm|cold/<chapter>.txt`。
+- `50_chapters/chapter_index.yaml` 维护排序和来源。
+- `export chapters` 只导出 accepted hot chapters，并按 chapter index 排序。
+
+## Variant Compare
+
+Agent 或作者生成的多个章节候选稿可以登记为 variants：
+
+```bash
+novel variant register black_tower <inputId> --from-file ./draft-a.txt --label A --chapter ch0001 --json
+novel variant register black_tower <inputId> --from-file ./draft-b.txt --label B --chapter ch0001 --json
+novel variant compare black_tower <inputId> --json
+novel variant decide black_tower <inputId> --variant <variantId> --json
+novel chapter accept black_tower <inputId> --variant <variantId> --chapter ch0001 --layer hot --json
+```
+
+比稿报告固定检查：章节目标贴合度、主角行动链、爽点/钩子、设定一致性、人物高亮、风格贴合、AI 味、毒点风险、后续可持续性。
+
+## Session / Snapshot
+
+loop 可以暂停、接管、恢复和回退：
+
+```bash
+novel session status black_tower --json
+novel session pause black_tower --note "作者接管世界观" --json
+novel session resume black_tower --json
+novel snapshot create black_tower --label "before volume rewrite" --json
+novel snapshot restore black_tower <snapshotId> --json
+novel project git-init black_tower --json
+```
+
+Snapshot 只恢复 `10_bible/`、`20_entities/`、`30_plot/`、`40_style/`、`50_chapters/` 和相关 manifests；raw inbox 和 trace 保留。
 
 ## Confirm A Vibe
 

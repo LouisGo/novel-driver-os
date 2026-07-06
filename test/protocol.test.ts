@@ -16,6 +16,12 @@ import { decideReview, listPendingApply, listReviewQueue } from "../src/review.j
 import { applyMemoryPatch } from "../src/patch.js";
 import { getProjectStatus } from "../src/status.js";
 import { readTraceTail } from "../src/trace.js";
+import { createMemoryProposal } from "../src/propose.js";
+import { acceptChapter } from "../src/chapter.js";
+import { exportChapters } from "../src/exporter.js";
+import { compareVariants, decideVariant, registerVariant } from "../src/variant.js";
+import { createSnapshot, restoreSnapshot } from "../src/snapshot.js";
+import { getSessionStatus, pauseSession, resumeSession } from "../src/session.js";
 
 test("validator rejects intention and retcon debt protocol violations", { concurrency: false }, async () => {
   await withProject(async (root) => {
@@ -122,6 +128,7 @@ test("creative input loop routes, reviews, applies and exposes GUI status", { co
 
     const decision = await decideReview("black_tower", packet.input_id, "approve", "accept plot memory");
     assert.equal(decision.decision.decision, "approved");
+    assert.equal(decision.changed_files.includes(`00_inbox/processed/${packet.input_id}.yaml`), true);
     assert.equal((await listReviewQueue("black_tower")).length, 0);
     assert.equal((await listPendingApply("black_tower")).length, 1);
 
@@ -142,7 +149,120 @@ test("creative input loop routes, reviews, applies and exposes GUI status", { co
     const trace = await readTraceTail("black_tower", 20);
     assert(trace.some((event) => event.command === "route"));
     assert(trace.some((event) => event.command === "review.decide"));
+    assert(trace.some((event) => event.command === "snapshot.create"));
     assert(trace.some((event) => event.command === "patch.apply"));
+  });
+});
+
+test("multi-intent input, outline route and non-chapter proposal enter review loop", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const styleFeedbackPath = path.join(root, "style-feedback.md");
+    await fs.writeFile(styleFeedbackPath, "#black_tower #文风 #反馈 #大纲\n文风要克制，同时第一卷大纲不要设定集开篇。\n", "utf8");
+    const stylePacket = await ingestInput("black_tower", styleFeedbackPath);
+    assert.equal(stylePacket.detected_type, "style_feedback");
+    assert(stylePacket.detected_intents.includes("style_feedback"));
+    assert(stylePacket.detected_intents.includes("outline"));
+    assert(stylePacket.detected_intents.includes("feedback"));
+
+    const outlinePath = path.join(root, "outline.md");
+    await fs.writeFile(outlinePath, "#black_tower #大纲 #候选\n第一卷：主角查清旧案，进入学馆，卷尾发现父亲留下反证。\n", "utf8");
+    const outlinePacket = await ingestInput("black_tower", outlinePath);
+    const route = await routeInput("black_tower", outlinePacket.input_id);
+    assert.equal(route.route_plan.primary_route, "memory_patch_proposal");
+    assert.deepEqual(route.route_plan.blocked_by, []);
+    assert(route.route_plan.responsible_roles.includes("Canon Checker"));
+    assert.deepEqual(route.route_plan.next_commands, [`novel propose black_tower ${outlinePacket.input_id} --kind outline`]);
+
+    const proposal = await createMemoryProposal("black_tower", outlinePacket.input_id, "outline");
+    assert.equal(proposal.kind, "outline");
+    assert.equal((await listReviewQueue("black_tower")).some((item) => item.input_id === outlinePacket.input_id), true);
+
+    const decision = await decideReview("black_tower", outlinePacket.input_id, "approve", "accept outline proposal");
+    assert.equal(decision.decision.decision, "approved");
+    const packetAfterApprove = YAML.parse(await fs.readFile(path.join(root, `projects/black_tower/00_inbox/processed/${outlinePacket.input_id}.yaml`), "utf8"));
+    assert.equal(packetAfterApprove.status, "approved_pending_apply");
+    assert.equal((await listPendingApply("black_tower")).some((item) => item.input_id === outlinePacket.input_id), true);
+
+    const applied = await applyMemoryPatch("black_tower", outlinePacket.input_id, "plot");
+    assert.equal(applied.target, "plot");
+    const result = await validateProject("black_tower");
+    assert.equal(result.ok, true, result.errors.join("\n"));
+  });
+});
+
+test("chapter accept writes sorted index and export copies accepted hot chapters", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const first = await ingestChapter(root, "ch1.md", "#black_tower #正文 #ch1 #正稿\n# 第一章\n她没有回头，只是把伞往他那边偏了半寸。\n\n“你最好别死。”\n");
+    await createChapterIntake("black_tower", first.input_id);
+    await decideReview("black_tower", first.input_id, "approve", "accept chapter");
+    const accepted = await acceptChapter("black_tower", first.input_id, "ch0001", "hot");
+    assert.deepEqual(accepted.changed_files, ["50_chapters/hot/ch0001.txt", "50_chapters/chapter_index.yaml"]);
+
+    const manuscript = await fs.readFile(path.join(root, "projects/black_tower/50_chapters/hot/ch0001.txt"), "utf8");
+    assert.doesNotMatch(manuscript, /#black_tower/);
+    assert.match(manuscript, /# 第一章/);
+
+    const outDir = path.join(root, "exported");
+    const exported = await exportChapters("black_tower", { format: "txt", out: outDir });
+    assert.equal(exported.exported_files.length, 1);
+    assert.match(await fs.readFile(path.join(outDir, "ch0001.txt"), "utf8"), /你最好别死/);
+
+    const result = await validateProject("black_tower");
+    assert.equal(result.ok, true, result.errors.join("\n"));
+  });
+});
+
+test("variant workflow compares, decides winner and accepts the winning draft", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const packet = await ingestChapter(root);
+    await createChapterIntake("black_tower", packet.input_id);
+    await decideReview("black_tower", packet.input_id, "approve", "compare variants");
+
+    const draftA = path.join(root, "variant-a.txt");
+    const draftB = path.join(root, "variant-b.txt");
+    await fs.writeFile(draftA, "她没有回头。\n\n这一版很短。\n", "utf8");
+    await fs.writeFile(draftB, "她没有回头，只是把伞往他那边偏了半寸。\n血从掌心落下，他必须选择是否救人。\n门外有人问：你最好别死？\n", "utf8");
+
+    const variantA = await registerVariant("black_tower", packet.input_id, draftA, "short", "ch0050");
+    const variantB = await registerVariant("black_tower", packet.input_id, draftB, "pressure", "ch0050");
+    const compared = await compareVariants("black_tower", packet.input_id);
+    assert.equal(compared.changed_files.length, 1);
+    assert.match(compared.report, /章节目标贴合度/);
+
+    const decided = await decideVariant("black_tower", packet.input_id, variantB.variant.variant_id, "pressure wins");
+    assert.equal(decided.winner_variant_id, variantB.variant.variant_id);
+    const accepted = await acceptChapter("black_tower", packet.input_id, "ch0050", "hot", variantB.variant.variant_id);
+    assert.equal(accepted.chapter, "ch0050");
+
+    const manifest = YAML.parse(await fs.readFile(path.join(root, `projects/black_tower/50_chapters/variants/${packet.input_id}/variants.yaml`), "utf8"));
+    assert.equal(manifest.winner_variant_id, variantB.variant.variant_id);
+    assert.equal(manifest.variants.find((item: { variant_id: string }) => item.variant_id === variantA.variant.variant_id).status, "rejected");
+
+    const result = await validateProject("black_tower");
+    assert.equal(result.ok, true, result.errors.join("\n"));
+  });
+});
+
+test("session ledger and snapshots can pause, resume and restore project memory", { concurrency: false }, async () => {
+  await withProject(async (root) => {
+    const paused = await pauseSession("black_tower", "author takes over");
+    assert.equal(paused.session.state, "paused");
+    assert.equal((await getSessionStatus("black_tower")).session.state, "paused");
+    const resumed = await resumeSession("black_tower", "agent resumes");
+    assert.equal(resumed.session.state, "active");
+
+    const snapshot = await createSnapshot("black_tower", "before canon mutation");
+    const canonPath = path.join(root, "projects/black_tower/10_bible/canon_registry.md");
+    await fs.appendFile(canonPath, "\nMUTATED CANON\n", "utf8");
+    assert.match(await fs.readFile(canonPath, "utf8"), /MUTATED CANON/);
+
+    const restored = await restoreSnapshot("black_tower", snapshot.snapshot_id);
+    assert(restored.restored_scopes.includes("10_bible"));
+    assert.doesNotMatch(await fs.readFile(canonPath, "utf8"), /MUTATED CANON/);
+
+    const trace = await readTraceTail("black_tower", 20);
+    assert(trace.some((event) => event.command === "session.pause"));
+    assert(trace.some((event) => event.command === "snapshot.restore"));
   });
 });
 
@@ -191,8 +311,8 @@ async function withTempCwd(run: (root: string) => Promise<void>): Promise<void> 
   }
 }
 
-async function ingestChapter(root: string): Promise<Awaited<ReturnType<typeof ingestInput>>> {
-  const filePath = path.join(root, "chapter.md");
-  await fs.writeFile(filePath, "#black_tower #正文 #ch50 #正稿\n她没有回头，只是把伞往他那边偏了半寸。\n\n“你最好别死。”\n", "utf8");
+async function ingestChapter(root: string, fileName = "chapter.md", text = "#black_tower #正文 #ch50 #正稿\n她没有回头，只是把伞往他那边偏了半寸。\n\n“你最好别死。”\n"): Promise<Awaited<ReturnType<typeof ingestInput>>> {
+  const filePath = path.join(root, fileName);
+  await fs.writeFile(filePath, text, "utf8");
   return ingestInput("black_tower", filePath);
 }

@@ -9,12 +9,12 @@ import {
   InputType,
 } from "./schemas.js";
 import {
-  copyFile,
   ensureDir,
   listFilesRecursive,
   pathExists,
   readText,
   readYaml,
+  writeText,
   writeYaml,
 } from "./fs-utils.js";
 import { projectRoot, relativeToProject, safeName } from "./paths.js";
@@ -28,8 +28,16 @@ export interface PacketLocation {
 }
 
 const TAG_RE = /(^|\s)#([\p{L}\p{N}_-]+)/gu;
+export type SourceActor = "human" | "agent" | "model";
 
-export async function ingestInput(projectName: string, filePath: string): Promise<AuthorInputPacket> {
+export interface IngestOptions {
+  sourceActor?: SourceActor;
+  supersedesInputId?: string | null;
+  sourceChannel?: string;
+  rawNameHint?: string;
+}
+
+export async function ingestInput(projectName: string, filePath: string, options: IngestOptions = {}): Promise<AuthorInputPacket> {
   const root = projectRoot(projectName);
   if (!(await pathExists(path.join(root, "project.yaml")))) {
     throw new Error(`Project not found: ${projectName}`);
@@ -37,12 +45,29 @@ export async function ingestInput(projectName: string, filePath: string): Promis
 
   const absoluteSource = path.resolve(filePath);
   const rawText = await readText(absoluteSource);
-  const inputId = createInputId(rawText);
-  const rawName = `${inputId}_${safeName(path.basename(filePath)) || "input.md"}`;
-  const rawTarget = path.join(root, "00_inbox/raw", rawName);
-  await copyFile(absoluteSource, rawTarget);
+  return ingestText(projectName, rawText, {
+    ...options,
+    sourceChannel: options.sourceChannel ?? "file",
+    rawNameHint: options.rawNameHint ?? path.basename(filePath),
+  });
+}
 
-  const packet = buildAuthorInputPacket(projectName, rawText, rawTarget, inputId);
+export async function ingestText(projectName: string, rawText: string, options: IngestOptions = {}): Promise<AuthorInputPacket> {
+  const root = projectRoot(projectName);
+  if (!(await pathExists(path.join(root, "project.yaml")))) {
+    throw new Error(`Project not found: ${projectName}`);
+  }
+
+  const inputId = createInputId(rawText);
+  const rawName = `${inputId}_${safeName(options.rawNameHint ?? "stdin.md") || "input.md"}`;
+  const rawTarget = path.join(root, "00_inbox/raw", rawName);
+  await writeText(rawTarget, rawText);
+
+  const packet = buildAuthorInputPacket(projectName, rawText, rawTarget, inputId, {
+    sourceActor: options.sourceActor,
+    sourceChannel: options.sourceChannel,
+    supersedesInputId: options.supersedesInputId,
+  });
   const packetDir = packet.status === "ignored" ? "ignored" : "triaged";
   await writeYaml(path.join(root, "00_inbox", packetDir, `${inputId}.yaml`), packet);
   if (packet.detected_type === "discarded_idea" && packet.status !== "ignored") {
@@ -59,7 +84,9 @@ export async function ingestInput(projectName: string, filePath: string): Promis
     ],
     metadata: {
       detected_type: packet.detected_type,
+      detected_intents: packet.detected_intents,
       authority_level: packet.authority_level,
+      source_actor: packet.source_actor,
     },
   });
   return packet;
@@ -119,9 +146,11 @@ export function buildAuthorInputPacket(
   rawText: string,
   rawTargetPath: string,
   inputId = createInputId(rawText),
+  options: IngestOptions = {},
 ): AuthorInputPacket {
   const tags = extractTags(rawText);
-  const detectedType = detectType(rawText, tags);
+  const detectedIntents = detectIntents(rawText, tags);
+  const detectedType = detectedIntents[0] ?? "unknown";
   const chapter = detectChapter(tags, rawText);
   const entity = detectEntity(tags, rawText);
   const authorityLevel = detectAuthority(tags, detectedType);
@@ -131,10 +160,11 @@ export function buildAuthorInputPacket(
   const packet: AuthorInputPacket = {
     input_id: inputId,
     project: projectName,
-    source_channel: "file",
-    source_type: "human",
+    source_channel: options.sourceChannel ?? "file",
+    source_type: options.sourceActor ?? "human",
     raw_source_path: relativeToProject(projectName, rawTargetPath),
     detected_type: detectedType,
+    detected_intents: detectedIntents,
     target_scope: {
       entity,
       chapter,
@@ -144,9 +174,11 @@ export function buildAuthorInputPacket(
     status,
     confidence,
     raw_text_excerpt: excerpt(rawText),
-    system_interpretation: interpretationsFor(detectedType, entity, chapter),
+    system_interpretation: interpretationsFor(detectedType, entity, chapter, detectedIntents),
     requires_confirmation: requiresConfirmation,
     recommended_actions: recommendedActionsFor(detectedType, authorityLevel, status),
+    source_actor: options.sourceActor ?? "human",
+    supersedes_input_id: options.supersedesInputId ?? null,
     created_at: nowIso(),
   };
   return AuthorInputPacketSchema.parse(packet);
@@ -192,28 +224,41 @@ function createInputId(rawText: string): string {
 
 function bucketForStatus(status: InputStatus): "triaged" | "processed" | "ignored" {
   if (status === "ignored" || status === "archived") return "ignored";
-  if (["processed", "pending_confirmation", "applied"].includes(status)) return "processed";
+  if (["processed", "pending_confirmation", "approved_pending_apply", "applied"].includes(status)) return "processed";
   return "triaged";
 }
 
-function detectType(rawText: string, tags: Set<string>): InputType {
-  if (tags.has("废案")) return "discarded_idea";
-  if (tags.has("反馈")) return "feedback";
-  if (tags.has("文风")) return "style_feedback";
-  if (tags.has("留白")) return "ambiguity";
-  if (tags.has("人设") || tags.has("女主") || tags.has("男主") || tags.has("主角")) return "character";
-  if (tags.has("世界观")) return "worldbuilding";
-  if (tags.has("设定")) return "setting";
-  if (tags.has("正文")) return rawText.length > 160 || detectChapter(tags, rawText) ? "chapter" : "fragment";
-  if (tags.has("灵感")) return "inspiration";
+function detectIntents(rawText: string, tags: Set<string>): InputType[] {
+  const intents: InputType[] = [];
+  const add = (type: InputType) => {
+    if (!intents.includes(type)) intents.push(type);
+  };
 
-  if (/废案|舍弃|不要用/.test(rawText)) return "discarded_idea";
-  if (/文风|语气|笔触|AI味/.test(rawText)) return "style_feedback";
-  if (/留白|暂时不要解释|不要说破/.test(rawText)) return "ambiguity";
-  if (/女主|男主|主角|人设|角色/.test(rawText)) return "character";
-  if (/世界|宗门|王朝|规则|能力|设定/.test(rawText)) return "setting";
-  if (/“[^”]+”/.test(rawText) && rawText.length > 40) return "fragment";
-  return "unknown";
+  if (tags.has("废案")) add("discarded_idea");
+  if (tags.has("变体") || tags.has("版本")) add("chapter_variant");
+  if (tags.has("重写") || tags.has("改写") || tags.has("比稿")) add("rewrite_request");
+  if (tags.has("正文")) add(rawText.length > 160 || detectChapter(tags, rawText) ? "chapter" : "fragment");
+  if (tags.has("文风")) add("style_feedback");
+  if (tags.has("留白")) add("ambiguity");
+  if (tags.has("人设") || tags.has("女主") || tags.has("男主") || tags.has("主角")) add("character");
+  if (tags.has("世界观")) add("worldbuilding");
+  if (tags.has("大纲")) add("outline");
+  if (tags.has("设定")) add("setting");
+  if (tags.has("灵感")) add("inspiration");
+  if (tags.has("反馈")) add("feedback");
+
+  if (/废案|舍弃|不要用/.test(rawText)) add("discarded_idea");
+  if (/重写|改写|比稿|另写[一二三四五六七八九十\d]+版|多个版本|N\s*个版本/i.test(rawText)) add("rewrite_request");
+  if (/文风|语气|笔触|AI味/.test(rawText)) add("style_feedback");
+  if (/留白|暂时不要解释|不要说破/.test(rawText)) add("ambiguity");
+  if (/第一卷|卷目标|大纲|章节规划|剧情编排|剧情走向/.test(rawText)) add("outline");
+  if (/女主|男主|主角|人设|角色/.test(rawText)) add("character");
+  if (/世界观|世界|宗门|王朝|九炉域|地图|城邦/.test(rawText)) add("worldbuilding");
+  if (/规则|能力|修炼体系|境界|设定/.test(rawText)) add("setting");
+  if (/反馈|不满意|误解|纠偏/.test(rawText)) add("feedback");
+  if (/“[^”]+”/.test(rawText) && rawText.length > 40) add("fragment");
+
+  return intents.length > 0 ? intents : ["unknown"];
 }
 
 function detectChapter(tags: Set<string>, rawText: string): string | null {
@@ -252,20 +297,23 @@ function confidenceFor(tags: Set<string>, type: InputType): number {
   return Math.min(0.95, Number(confidence.toFixed(2)));
 }
 
-function interpretationsFor(type: InputType, entity: string | null, chapter: string | null): string[] {
+function interpretationsFor(type: InputType, entity: string | null, chapter: string | null, intents: InputType[] = [type]): string[] {
   const target = entity ? `目标实体可能是 ${entity}。` : "暂未识别到明确目标实体。";
   const chapterText = chapter ? `目标章节可能是 ${chapter}。` : "暂未识别到明确章节。";
-  const common = [target, chapterText, "该输入不会直接写入正史，只会作为候选、proposal 或 intake 来源。"];
+  const common = [`检测到的输入意图：${intents.join(", ")}。`, target, chapterText, "该输入不会直接写入正史，只会作为候选、proposal 或 intake 来源。"];
   const byType: Record<InputType, string> = {
     inspiration: "这更像一条灵感碎片，适合进入候选池或 open_questions。",
     chapter: "这更像作者亲写章节，适合进入 Human Chapter Intake。",
     fragment: "这更像正文片段，适合进入 Human Chapter Intake 但需要作者确认范围。",
+    outline: "这更像卷级或章节级大纲，适合生成 plot memory patch proposal。",
     setting: "这更像设定想法，适合生成 memory patch proposal。",
     character: "这更像人设候选，尤其不能直接写入角色正史。",
     worldbuilding: "这更像世界观想法，适合与 world_contract 对齐。",
     ambiguity: "这更像有意留白，应保护为 intentional ambiguity。",
     style_feedback: "这更像文风反馈，适合进入 style candidate。",
     discarded_idea: "这更像废案或被舍弃灵感，应进入 discarded brilliance 候选。",
+    rewrite_request: "这更像重写或比稿请求，应进入 variant workflow。",
+    chapter_variant: "这更像章节候选变体，应登记为 variant，而不是直接覆盖正稿。",
     feedback: "这更像作者对 AI 稿或系统理解的反馈，适合进入 alignment。",
     unknown: "系统无法稳定判断输入类型，需要作者确认。",
   };
@@ -278,12 +326,15 @@ function recommendedActionsFor(type: InputType, authority: string, status: Input
     inspiration: ["add_to_inspiration_candidates", "review_in_weekly_alignment"],
     chapter: ["run_human_chapter_intake", "generate_creative_intake_capsule"],
     fragment: ["run_human_chapter_intake", "ask_author_for_scope"],
+    outline: ["generate_outline_memory_patch", "ask_author_confirmation"],
     setting: ["generate_memory_patch_candidate", "ask_author_confirmation"],
     character: ["add_to_character_candidates", "ask_author_confirmation"],
     worldbuilding: ["generate_world_contract_patch_candidate", "ask_author_confirmation"],
     ambiguity: ["add_to_intentional_ambiguity_candidate", "protect_from_auto_explanation"],
     style_feedback: ["generate_style_candidate", "review_in_weekly_alignment"],
     discarded_idea: ["append_discarded_brilliance_candidate", "record_resurrection_triggers"],
+    rewrite_request: ["register_or_generate_variants", "compare_variants"],
+    chapter_variant: ["register_chapter_variant", "compare_variants"],
     feedback: ["review_alignment_feedback", "adjust_system_interpretation"],
     unknown: ["manual_review_required"],
   };

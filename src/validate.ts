@@ -35,6 +35,8 @@ export async function validateProject(projectName: string): Promise<ValidationRe
 
   await validateYamlFile(path.join(root, "project.yaml"), ProjectSchema.parse, errors);
   await validateYamlFile(path.join(root, "70_debt/retcon_debt.yaml"), RetconDebtSchema.parse, errors);
+  await validateChapterIndex(root, path.join(root, "50_chapters/chapter_index.yaml"), errors);
+  await validateSessionLedger(root, path.join(root, "session.yaml"), errors);
 
   const yamlFiles = (await listFilesRecursive(root)).filter((file) => /\.(yaml|yml)$/i.test(file));
   for (const file of yamlFiles) {
@@ -89,20 +91,31 @@ export async function validateProject(projectName: string): Promise<ValidationRe
 
   const intakeDirs = await listIntakeDirs(root);
   for (const dir of intakeDirs) {
-    for (const file of INTAKE_FILES) {
-      if (!(await pathExists(path.join(dir, file)))) {
-        errors.push(`Incomplete intake capsule ${relative(root, dir)} missing ${file}`);
+    const hasFactDelta = await pathExists(path.join(dir, "fact_delta.yaml"));
+    const hasMemoryPatch = await pathExists(path.join(dir, "memory_patch.yaml"));
+    if (hasFactDelta) {
+      for (const file of INTAKE_FILES) {
+        if (!(await pathExists(path.join(dir, file)))) {
+          errors.push(`Incomplete intake capsule ${relative(root, dir)} missing ${file}`);
+        }
       }
+      await validateYamlFile(path.join(dir, "fact_delta.yaml"), FactDeltaSchema.parse, errors);
+      await validateYamlFile(path.join(dir, "intention_hypotheses.yaml"), IntentionHypothesesFileSchema.parse, errors);
+      await validateAtmosphereTriads(root, path.join(dir, "atmosphere_triads.md"), errors);
+      await validateVibeFiles(root, dir, errors);
+      await validateOptionalIntakeFiles(root, dir, errors);
     }
-    await validateYamlFile(path.join(dir, "fact_delta.yaml"), FactDeltaSchema.parse, errors);
-    await validateYamlFile(path.join(dir, "intention_hypotheses.yaml"), IntentionHypothesesFileSchema.parse, errors);
-    await validateAtmosphereTriads(root, path.join(dir, "atmosphere_triads.md"), errors);
-    await validateVibeFiles(root, dir, errors);
-    await validateMemoryPatch(root, path.join(dir, "memory_patch.yaml"), errors);
-    await validateOptionalIntakeFiles(root, dir, errors);
+    if (hasMemoryPatch) {
+      await validateMemoryPatch(root, path.join(dir, "memory_patch.yaml"), errors);
+    }
+    if (!hasFactDelta && !hasMemoryPatch) {
+      errors.push(`Intake/proposal directory ${relative(root, dir)} must contain fact_delta.yaml or memory_patch.yaml`);
+    }
   }
 
   await validateRetconDebtProtocol(root, path.join(root, "70_debt/retcon_debt.yaml"), errors);
+  await validateVariants(root, errors);
+  await validateSnapshots(root, errors);
 
   const discarded = path.join(root, "40_style/discarded_brilliance.md");
   if (await pathExists(discarded)) {
@@ -149,7 +162,7 @@ function packetBucket(root: string, file: string): string {
 
 function bucketForStatus(status: string): "triaged" | "processed" | "ignored" {
   if (status === "ignored" || status === "archived") return "ignored";
-  if (["processed", "pending_confirmation", "applied"].includes(status)) return "processed";
+  if (["processed", "pending_confirmation", "approved_pending_apply", "applied"].includes(status)) return "processed";
   return "triaged";
 }
 
@@ -203,6 +216,43 @@ async function validateMemoryPatch(root: string, filePath: string, errors: strin
   }
 }
 
+async function validateChapterIndex(root: string, filePath: string, errors: string[]): Promise<void> {
+  if (!(await pathExists(filePath))) return;
+  try {
+    const value = await readYaml(filePath);
+    if (!isRecord(value) || !Array.isArray(value.chapters)) {
+      errors.push(`${relative(root, filePath)} must contain chapters array`);
+      return;
+    }
+    for (const [index, entry] of value.chapters.entries()) {
+      if (!isRecord(entry) || typeof entry.chapter !== "string" || !["hot", "warm", "cold"].includes(String(entry.layer)) || typeof entry.file !== "string") {
+        errors.push(`${relative(root, filePath)} chapters[${index}] must include chapter, layer and file`);
+        continue;
+      }
+      if (entry.file.startsWith("/") || entry.file.split(/[\\/]/).includes("..")) {
+        errors.push(`${relative(root, filePath)} chapters[${index}].file must be project-relative`);
+      }
+      if (!(await pathExists(path.join(root, entry.file)))) {
+        errors.push(`${relative(root, filePath)} chapters[${index}].file does not exist: ${entry.file}`);
+      }
+    }
+  } catch (error) {
+    errors.push(`Invalid ${relative(root, filePath)}: ${(error as Error).message}`);
+  }
+}
+
+async function validateSessionLedger(root: string, filePath: string, errors: string[]): Promise<void> {
+  if (!(await pathExists(filePath))) return;
+  try {
+    const value = await readYaml(filePath);
+    if (!isRecord(value) || !["active", "paused"].includes(String(value.state))) {
+      errors.push(`${relative(root, filePath)} state must be active or paused`);
+    }
+  } catch (error) {
+    errors.push(`Invalid ${relative(root, filePath)}: ${(error as Error).message}`);
+  }
+}
+
 async function validateOptionalIntakeFiles(root: string, dir: string, errors: string[]): Promise<void> {
   for (const file of OPTIONAL_INTAKE_FILES) {
     const filePath = path.join(dir, file);
@@ -240,6 +290,46 @@ async function validateRetconDebtProtocol(root: string, filePath: string, errors
     }
   } catch {
     // validateYamlFile already reports schema errors for this file.
+  }
+}
+
+async function validateVariants(root: string, errors: string[]): Promise<void> {
+  const variantFiles = (await listFilesRecursive(path.join(root, "50_chapters/variants"))).filter((file) => file.endsWith("variants.yaml"));
+  for (const file of variantFiles) {
+    try {
+      const value = await readYaml(file);
+      if (!isRecord(value) || typeof value.input_id !== "string" || !Array.isArray(value.variants)) {
+        errors.push(`${relative(root, file)} must contain input_id and variants array`);
+        continue;
+      }
+      for (const [index, variant] of value.variants.entries()) {
+        if (!isRecord(variant) || typeof variant.variant_id !== "string" || typeof variant.file !== "string" || !["candidate", "winner", "rejected"].includes(String(variant.status))) {
+          errors.push(`${relative(root, file)} variants[${index}] must include variant_id, file and valid status`);
+          continue;
+        }
+        if (!(await pathExists(path.join(root, variant.file)))) {
+          errors.push(`${relative(root, file)} variants[${index}].file does not exist: ${variant.file}`);
+        }
+      }
+      const winners = value.variants.filter((variant: unknown) => isRecord(variant) && variant.status === "winner");
+      if (winners.length > 1) errors.push(`${relative(root, file)} cannot contain more than one winner`);
+    } catch (error) {
+      errors.push(`Invalid ${relative(root, file)}: ${(error as Error).message}`);
+    }
+  }
+}
+
+async function validateSnapshots(root: string, errors: string[]): Promise<void> {
+  const manifests = (await listFilesRecursive(path.join(root, "90_archive/snapshots"))).filter((file) => file.endsWith("manifest.yaml"));
+  for (const file of manifests) {
+    try {
+      const value = await readYaml(file);
+      if (!isRecord(value) || typeof value.snapshot_id !== "string" || !Array.isArray(value.scopes)) {
+        errors.push(`${relative(root, file)} must contain snapshot_id and scopes array`);
+      }
+    } catch (error) {
+      errors.push(`Invalid ${relative(root, file)}: ${(error as Error).message}`);
+    }
   }
 }
 

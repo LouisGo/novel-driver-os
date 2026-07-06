@@ -65,7 +65,7 @@ export async function listPendingApply(projectName: string): Promise<ReviewQueue
   const items: ReviewQueueItem[] = [];
   for (const packet of packets) {
     const decision = await readReviewDecision(projectName, packet.input_id);
-    if (packet.status === "pending_confirmation" && decision?.decision === "approved") {
+    if (packet.status === "approved_pending_apply" || (packet.status === "pending_confirmation" && decision?.decision === "approved")) {
       items.push({
         input_id: packet.input_id,
         detected_type: packet.detected_type,
@@ -115,6 +115,7 @@ export async function decideReview(
   const nextPacket: AuthorInputPacket = normalized === "approved"
     ? {
       ...packet,
+      status: "approved_pending_apply",
       requires_confirmation: false,
       recommended_actions: ["apply_memory_patch", "build_context_packet"],
     }

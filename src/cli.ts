@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import path from "node:path";
 import { initProject } from "./project.js";
-import { ingestInput, ignoreInput, listInputs, reviewPacket, findPacket } from "./input.js";
+import { ingestInput, ingestText, ignoreInput, listInputs, reviewPacket, findPacket, SourceActor } from "./input.js";
 import { confirmVibe, createChapterIntake } from "./intake.js";
 import { addDebt, debtReport } from "./debt.js";
 import { createStyleCandidate } from "./style.js";
@@ -15,6 +15,13 @@ import { routeInput } from "./route.js";
 import { decideReview, getReviewDetail, listPendingApply, listReviewQueue } from "./review.js";
 import { applyMemoryPatch, rejectMemoryPatch } from "./patch.js";
 import { getProjectStatus } from "./status.js";
+import { createMemoryProposal } from "./propose.js";
+import { acceptChapter } from "./chapter.js";
+import { exportChapters } from "./exporter.js";
+import { compareVariants, decideVariant, registerVariant } from "./variant.js";
+import { getSessionStatus, pauseSession, resumeSession } from "./session.js";
+import { createSnapshot, restoreSnapshot } from "./snapshot.js";
+import { initProjectGit } from "./project-git.js";
 
 const program = new Command();
 
@@ -35,11 +42,23 @@ program
 program
   .command("ingest")
   .argument("<projectName>")
-  .argument("<filePath>")
+  .argument("[filePath]")
+  .option("--stdin", "Read input text from stdin.")
+  .option("--source-actor <actor>", "human | agent | model", "human")
+  .option("--supersedes <inputId>", "Record that this input supersedes a previous input.")
   .option("--json", "Print machine-readable JSON.")
   .description("Copy a Markdown/TXT input into raw inbox and generate an Author Input Packet.")
-  .action(wrap(async (projectName: string, filePath: string, options: { json?: boolean }) => {
-    const packet = await ingestInput(projectName, filePath);
+  .action(wrap(async (projectName: string, filePath: string | undefined, options: { stdin?: boolean; sourceActor: SourceActor; supersedes?: string; json?: boolean }) => {
+    const packet = options.stdin
+      ? await ingestText(projectName, await readStdin(), {
+        sourceActor: options.sourceActor,
+        sourceChannel: "stdin",
+        rawNameHint: "stdin.md",
+        supersedesInputId: options.supersedes ?? null,
+      })
+      : filePath
+        ? await ingestInput(projectName, filePath, { sourceActor: options.sourceActor, supersedesInputId: options.supersedes ?? null })
+        : (() => { throw new Error("ingest requires <filePath> unless --stdin is set."); })();
     if (options.json) {
       printJson({ ok: true, packet });
       return;
@@ -48,6 +67,23 @@ program
     console.log(`detected_type: ${packet.detected_type}`);
     console.log(`authority_level: ${packet.authority_level}`);
     console.log(`status: ${packet.status}`);
+  }));
+
+program
+  .command("propose")
+  .argument("<projectName>")
+  .argument("<inputId>")
+  .requiredOption("--kind <kind>", "character | setting | worldbuilding | outline | ambiguity")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Generate a memory patch proposal for non-chapter inputs.")
+  .action(wrap(async (projectName: string, inputId: string, options: { kind: string; json?: boolean }) => {
+    const result = await createMemoryProposal(projectName, inputId, options.kind);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`Created ${result.kind} proposal for ${inputId}`);
+    console.log(`next: ${result.next_commands.join(" && ")}`);
   }));
 
 program
@@ -284,6 +320,98 @@ patch
     console.log(`Rejected patch for ${inputId}`);
   }));
 
+const chapter = program.command("chapter").description("Accepted chapter commands.");
+
+chapter
+  .command("accept")
+  .argument("<projectName>")
+  .argument("<inputId>")
+  .requiredOption("--chapter <chapter>")
+  .option("--layer <layer>", "hot | warm | cold", "hot")
+  .option("--variant <variantId>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Accept an approved chapter or winning variant into 50_chapters/<layer>.")
+  .action(wrap(async (projectName: string, inputId: string, options: { chapter: string; layer: string; variant?: string; json?: boolean }) => {
+    const result = await acceptChapter(projectName, inputId, options.chapter, options.layer, options.variant ?? null);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`Accepted ${options.chapter} into ${result.layer}`);
+  }));
+
+const exportCommand = program.command("export").description("Export project artifacts.");
+
+exportCommand
+  .command("chapters")
+  .argument("<projectName>")
+  .requiredOption("--format <format>", "txt")
+  .option("--out <dir>")
+  .option("--zip <file>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Export accepted hot chapters in chapter_index order.")
+  .action(wrap(async (projectName: string, options: { format: string; out?: string; zip?: string; json?: boolean }) => {
+    const result = await exportChapters(projectName, options);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`Exported ${result.exported_files.length} chapters`);
+    if (result.zip_file) console.log(`zip: ${result.zip_file}`);
+  }));
+
+const variant = program.command("variant").description("Chapter variant comparison workflow.");
+
+variant
+  .command("register")
+  .argument("<projectName>")
+  .argument("<inputId>")
+  .requiredOption("--from-file <file>")
+  .requiredOption("--label <label>")
+  .option("--chapter <chapter>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Register a candidate chapter variant file.")
+  .action(wrap(async (projectName: string, inputId: string, options: { fromFile: string; label: string; chapter?: string; json?: boolean }) => {
+    const result = await registerVariant(projectName, inputId, options.fromFile, options.label, options.chapter ?? null);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`Registered ${result.variant.variant_id}`);
+  }));
+
+variant
+  .command("compare")
+  .argument("<projectName>")
+  .argument("<inputId>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Generate a fixed-dimension variant comparison report.")
+  .action(wrap(async (projectName: string, inputId: string, options: { json?: boolean }) => {
+    const result = await compareVariants(projectName, inputId);
+    if (options.json) {
+      printJson({ ok: true, changed_files: result.changed_files });
+      return;
+    }
+    console.log(`Wrote variant compare report: ${result.changed_files.join(", ")}`);
+  }));
+
+variant
+  .command("decide")
+  .argument("<projectName>")
+  .argument("<inputId>")
+  .requiredOption("--variant <variantId>")
+  .option("--note <note>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Mark one registered variant as the winner.")
+  .action(wrap(async (projectName: string, inputId: string, options: { variant: string; note?: string; json?: boolean }) => {
+    const result = await decideVariant(projectName, inputId, options.variant, options.note ?? null);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`Winner: ${result.winner_variant_id}`);
+  }));
+
 const debt = program.command("debt").description("Retcon debt ledger commands.");
 
 debt
@@ -435,6 +563,97 @@ program
     console.log(`context_packets: ${status.context_packets.length}`);
   }));
 
+const session = program.command("session").description("Pause/resume loop ledger commands.");
+
+session
+  .command("status")
+  .argument("<projectName>")
+  .option("--json", "Print machine-readable JSON.")
+  .action(wrap(async (projectName: string, options: { json?: boolean }) => {
+    const result = await getSessionStatus(projectName);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`session: ${result.session.state}`);
+    console.log(`review_queue: ${result.project_status.review_queue.length}`);
+    console.log(`pending_apply: ${result.project_status.pending_apply.length}`);
+  }));
+
+session
+  .command("pause")
+  .argument("<projectName>")
+  .option("--note <note>")
+  .option("--json", "Print machine-readable JSON.")
+  .action(wrap(async (projectName: string, options: { note?: string; json?: boolean }) => {
+    const result = await pauseSession(projectName, options.note ?? null);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log("Session paused.");
+  }));
+
+session
+  .command("resume")
+  .argument("<projectName>")
+  .option("--note <note>")
+  .option("--json", "Print machine-readable JSON.")
+  .action(wrap(async (projectName: string, options: { note?: string; json?: boolean }) => {
+    const result = await resumeSession(projectName, options.note ?? null);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log("Session resumed.");
+  }));
+
+const snapshot = program.command("snapshot").description("Project snapshot commands.");
+
+snapshot
+  .command("create")
+  .argument("<projectName>")
+  .requiredOption("--label <label>")
+  .option("--json", "Print machine-readable JSON.")
+  .action(wrap(async (projectName: string, options: { label: string; json?: boolean }) => {
+    const result = await createSnapshot(projectName, options.label);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`Snapshot: ${result.snapshot_id}`);
+  }));
+
+snapshot
+  .command("restore")
+  .argument("<projectName>")
+  .argument("<snapshotId>")
+  .option("--json", "Print machine-readable JSON.")
+  .action(wrap(async (projectName: string, snapshotId: string, options: { json?: boolean }) => {
+    const result = await restoreSnapshot(projectName, snapshotId);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`Restored ${result.snapshot_id}`);
+  }));
+
+const project = program.command("project").description("Project maintenance commands.");
+
+project
+  .command("git-init")
+  .argument("<projectName>")
+  .option("--json", "Print machine-readable JSON.")
+  .description("Initialize project-local git inside projects/<projectName>.")
+  .action(wrap(async (projectName: string, options: { json?: boolean }) => {
+    const result = await initProjectGit(projectName);
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+    console.log(`Initialized project git: ${result.cwd}`);
+  }));
+
 program.parseAsync(process.argv).catch((error: unknown) => {
   console.error((error as Error).message);
   process.exit(1);
@@ -451,4 +670,12 @@ function wrap<T extends unknown[]>(fn: (...args: T) => Promise<void>): (...args:
 
 function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }

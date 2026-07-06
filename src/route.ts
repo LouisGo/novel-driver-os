@@ -9,6 +9,7 @@ export interface RoutePlan {
   input_id: string;
   primary_route: string;
   secondary_routes: string[];
+  responsible_roles: string[];
   blocked_by: string[];
   confirmation_required: boolean;
   risk_notes: string[];
@@ -85,6 +86,7 @@ function buildRoutePlan(packet: AuthorInputPacket): RoutePlan {
     ...base,
     primary_route: route.primary,
     secondary_routes: route.secondary,
+    responsible_roles: rolesFor(packet.detected_type),
     blocked_by: route.blocked,
     risk_notes: warnings,
     next_actions: actionsFor(packet.detected_type, route.blocked),
@@ -109,25 +111,30 @@ function routeFor(type: InputType): { primary: string; secondary: string[]; bloc
       secondary: ["scope_confirmation", "chapter_quality_review"],
       blocked: [],
     },
+    outline: {
+      primary: "memory_patch_proposal",
+      secondary: ["plot_architect", "canon_checker"],
+      blocked: [],
+    },
     setting: {
       primary: "memory_patch_proposal",
       secondary: ["canon_checker"],
-      blocked: ["dedicated_setting_patch_generator_not_implemented"],
+      blocked: [],
     },
     character: {
       primary: "memory_patch_proposal",
       secondary: ["canon_checker"],
-      blocked: ["dedicated_character_patch_generator_not_implemented"],
+      blocked: [],
     },
     worldbuilding: {
       primary: "memory_patch_proposal",
       secondary: ["world_contract_review", "canon_checker"],
-      blocked: ["dedicated_worldbuilding_patch_generator_not_implemented"],
+      blocked: [],
     },
     ambiguity: {
       primary: "intentional_ambiguity",
       secondary: ["context_guard"],
-      blocked: ["dedicated_ambiguity_apply_command_not_implemented"],
+      blocked: [],
     },
     style_feedback: {
       primary: "style_candidate",
@@ -137,6 +144,16 @@ function routeFor(type: InputType): { primary: string; secondary: string[]; bloc
     discarded_idea: {
       primary: "discarded_brilliance",
       secondary: ["ghost_resonance"],
+      blocked: [],
+    },
+    rewrite_request: {
+      primary: "variant_workflow",
+      secondary: ["chapter_quality_review", "style_candidate"],
+      blocked: ["agent_must_generate_variant_files_before_register"],
+    },
+    chapter_variant: {
+      primary: "variant_workflow",
+      secondary: ["chapter_quality_review", "variant_compare"],
       blocked: [],
     },
     feedback: {
@@ -158,12 +175,15 @@ function commandsFor(projectName: string, inputId: string, type: InputType): str
     inspiration: [`novel align weekly ${projectName}`],
     chapter: [`novel intake chapter ${projectName} ${inputId}`],
     fragment: [`novel intake chapter ${projectName} ${inputId}`],
-    setting: [`novel review detail ${projectName} ${inputId}`],
-    character: [`novel review detail ${projectName} ${inputId}`],
-    worldbuilding: [`novel review detail ${projectName} ${inputId}`],
-    ambiguity: [`novel review detail ${projectName} ${inputId}`],
+    outline: [`novel propose ${projectName} ${inputId} --kind outline`],
+    setting: [`novel propose ${projectName} ${inputId} --kind setting`],
+    character: [`novel propose ${projectName} ${inputId} --kind character`],
+    worldbuilding: [`novel propose ${projectName} ${inputId} --kind worldbuilding`],
+    ambiguity: [`novel propose ${projectName} ${inputId} --kind ambiguity`],
     style_feedback: [`novel style candidate ${projectName} ${inputId}`],
     discarded_idea: [`novel ghost scan ${projectName}`],
+    rewrite_request: [`novel variant register ${projectName} ${inputId} --from-file <draft-file> --label <label>`],
+    chapter_variant: [`novel variant register ${projectName} ${inputId} --from-file <draft-file> --label <label>`],
     feedback: [`novel align weekly ${projectName}`],
     unknown: [`novel review detail ${projectName} ${inputId}`],
   };
@@ -176,12 +196,15 @@ function actionsFor(type: InputType, blocked: string[]): string[] {
     inspiration: ["review_in_weekly_alignment"],
     chapter: ["run_human_chapter_intake"],
     fragment: ["run_human_chapter_intake", "ask_author_for_scope"],
+    outline: ["generate_outline_memory_patch", "ask_author_confirmation"],
     setting: ["generate_memory_patch_candidate", "ask_author_confirmation"],
     character: ["add_to_character_candidates", "ask_author_confirmation"],
     worldbuilding: ["generate_world_contract_patch_candidate", "ask_author_confirmation"],
     ambiguity: ["add_to_intentional_ambiguity_candidate", "protect_from_auto_explanation"],
     style_feedback: ["generate_style_candidate", "review_in_weekly_alignment"],
     discarded_idea: ["append_discarded_brilliance_candidate", "record_resurrection_triggers"],
+    rewrite_request: ["generate_variant_files", "register_variants", "compare_variants"],
+    chapter_variant: ["register_chapter_variant", "compare_variants"],
     feedback: ["review_alignment_feedback", "adjust_system_interpretation"],
     unknown: ["manual_review_required"],
   };
@@ -196,6 +219,26 @@ function riskNotesFor(packet: AuthorInputPacket): string[] {
   }
   if (packet.detected_type === "unknown") notes.push("low_confidence_type_detection");
   return notes;
+}
+
+function rolesFor(type: InputType): string[] {
+  const roles: Record<InputType, string[]> = {
+    inspiration: ["Router", "Context Assembler"],
+    chapter: ["Router", "Chapter Doctor", "Canon Checker", "Continuity Keeper", "Context Assembler"],
+    fragment: ["Router", "Chapter Doctor", "Canon Checker", "Context Assembler"],
+    outline: ["Router", "Canon Checker", "Continuity Keeper", "Context Assembler"],
+    setting: ["Router", "Canon Checker", "Continuity Keeper"],
+    character: ["Router", "Canon Checker"],
+    worldbuilding: ["Router", "Canon Checker", "Context Assembler"],
+    ambiguity: ["Router", "Canon Checker", "Context Assembler"],
+    style_feedback: ["Router", "Style Curator"],
+    discarded_idea: ["Router", "Continuity Keeper"],
+    rewrite_request: ["Router", "Chapter Doctor", "Style Curator", "Variant Judge"],
+    chapter_variant: ["Router", "Chapter Doctor", "Variant Judge"],
+    feedback: ["Router", "Style Curator", "Context Assembler"],
+    unknown: ["Router"],
+  };
+  return roles[type];
 }
 
 function routePlanPath(projectName: string, inputId: string): string {

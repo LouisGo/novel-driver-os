@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+const SAFE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+export const SafeIdSchema = z.string().min(1).regex(SAFE_ID_RE, "must be a safe file-system id");
+
 export const InputStatusSchema = z.enum([
   "raw",
   "triaged",
@@ -32,11 +36,13 @@ export const TargetScopeSchema = z.object({
 });
 
 export const AuthorInputPacketSchema = z.object({
-  input_id: z.string().min(1),
-  project: z.string().min(1),
+  input_id: SafeIdSchema,
+  project: SafeIdSchema,
   source_channel: z.string().min(1),
   source_type: z.string().min(1),
-  raw_source_path: z.string().min(1),
+  raw_source_path: z.string().min(1).refine((value) => !value.startsWith("/") && !value.split(/[\\/]/).includes(".."), {
+    message: "must be a relative path inside the project",
+  }),
   detected_type: InputTypeSchema,
   target_scope: TargetScopeSchema,
   authority_level: z.string().min(1),
@@ -62,6 +68,42 @@ export const IntentionHypothesisSchema = z.object({
   ttl: z.union([z.string().min(1), z.number().int().positive()]),
   can_enter_decision_log: z.union([z.boolean(), z.literal("needs_confirmation")]),
   status: z.string().min(1),
+}).superRefine((value, ctx) => {
+  const ttlChapters = chapterTtl(value.ttl);
+
+  if (value.level === "L2_strong_inference") {
+    if (value.can_enter_decision_log !== "needs_confirmation") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["can_enter_decision_log"],
+        message: "L2 strong inference must require human confirmation before decision log entry",
+      });
+    }
+    if (value.ttl === "permanent") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ttl"],
+        message: "L2 strong inference must have a finite TTL",
+      });
+    }
+  }
+
+  if (value.level === "L3_weak_guess") {
+    if (value.can_enter_decision_log !== false) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["can_enter_decision_log"],
+        message: "L3 weak guesses cannot enter the decision log",
+      });
+    }
+    if (value.ttl === "permanent" || ttlChapters === null || ttlChapters > 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ttl"],
+        message: "L3 weak guesses must have a finite TTL of 3 chapters or less",
+      });
+    }
+  }
 });
 
 export const IntentionHypothesesFileSchema = z.object({
@@ -79,12 +121,14 @@ export const FactDeltaSchema = z.object({
   source_refs: z.array(z.object({ file: z.string().min(1) })),
 });
 
+export const RetconSeveritySchema = z.enum(["low", "medium", "high"]);
+
 export const RetconDebtEntrySchema = z.object({
   chapter: z.string().min(1),
   issue: z.string().min(1),
   accepted_solution: z.string().min(1),
   debt_type: z.string().min(1),
-  severity: z.enum(["low", "medium", "high"]).or(z.string().min(1)),
+  severity: RetconSeveritySchema,
   created_at: z.string().optional(),
 });
 
@@ -96,7 +140,7 @@ export const RetconDebtSchema = z.object({
 });
 
 export const ProjectSchema = z.object({
-  name: z.string().min(1),
+  name: SafeIdSchema,
   schema_version: z.string().min(1),
   created_at: z.string().min(1),
   mode: z.enum(["manual_first", "assisted", "auto_reserved"]).or(z.string().min(1)),
@@ -105,3 +149,9 @@ export const ProjectSchema = z.object({
     ai_outputs_are: z.array(z.string()),
   }),
 });
+
+function chapterTtl(ttl: string | number): number | null {
+  if (typeof ttl === "number") return ttl;
+  const match = ttl.match(/^(\d+)_chapters$/);
+  return match ? Number(match[1]) : null;
+}

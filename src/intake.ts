@@ -1,7 +1,7 @@
 import path from "node:path";
 import { findPacket, updatePacket } from "./input.js";
 import { ensureDir, readText, writeText, writeYaml } from "./fs-utils.js";
-import { projectRoot } from "./paths.js";
+import { assertSafeId, projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
 import { AuthorInputPacket } from "./schemas.js";
 
@@ -25,9 +25,13 @@ export interface IntakeResult {
 }
 
 export async function createChapterIntake(projectName: string, inputId: string): Promise<IntakeResult> {
+  assertSafeId(inputId, "inputId");
   const { packet } = await findPacket(projectName, inputId);
   if (!["chapter", "fragment"].includes(packet.detected_type)) {
     throw new Error(`Input ${inputId} is ${packet.detected_type}; chapter intake requires chapter or fragment.`);
+  }
+  if (!["triaged", "routed"].includes(packet.status)) {
+    throw new Error(`Input ${inputId} is ${packet.status}; chapter intake only accepts triaged or routed inputs.`);
   }
 
   const root = projectRoot(projectName);
@@ -76,6 +80,8 @@ Unconfirmed but potentially useful vibes. These are short-term only and cannot e
 }
 
 export async function confirmVibe(projectName: string, inputId: string, hypothesisId: string): Promise<void> {
+  assertSafeId(inputId, "inputId");
+  assertSafeId(hypothesisId, "hypothesisId");
   const root = projectRoot(projectName);
   const intakeDir = path.join(root, "01_intake", inputId);
   const triadsPath = path.join(intakeDir, "atmosphere_triads.md");
@@ -94,7 +100,7 @@ export async function confirmVibe(projectName: string, inputId: string, hypothes
 
 confirmed_at: ${nowIso()}
 
-${selected.content.trim()}
+${markVibeConfirmed(selected.content)}
 `);
 
   const tentative = blocks
@@ -307,6 +313,27 @@ function parseVibeBlocks(markdown: string): Array<{ id: string; content: string 
   }
   if (current) blocks.push({ id: current.id, content: current.content.join("\n") });
   return blocks;
+}
+
+function markVibeConfirmed(content: string): string {
+  const lines = content.trim().split(/\r?\n/);
+  let sawRequiresConfirmation = false;
+  let sawStatus = false;
+  const updated = lines.map((line) => {
+    if (/^requires_confirmation:\s*/.test(line)) {
+      sawRequiresConfirmation = true;
+      return "requires_confirmation: false";
+    }
+    if (/^status:\s*/.test(line)) {
+      sawStatus = true;
+      return "status: confirmed";
+    }
+    return line;
+  });
+
+  if (!sawRequiresConfirmation) updated.push("requires_confirmation: false");
+  if (!sawStatus) updated.push("status: confirmed");
+  return updated.join("\n").trim();
 }
 
 function meaningfulLines(rawText: string): string[] {

@@ -56,7 +56,8 @@ function extractDiscardedItems(markdown: string): Array<{ id: string; triggers: 
   const blocks = markdown.split(/^##\s+/m).slice(1);
   return blocks.map((block) => {
     const id = block.split(/\r?\n/)[0]?.trim() || "unknown_discarded";
-    const triggerMatches = [...block.matchAll(/^\s*-\s+["']?([^"'\n]+)["']?\s*$/gm)].map((match) => match[1].trim());
+    const triggerSection = block.match(/resurrection_triggers:\s*\n((?:\s+-\s+["']?[^"'\n]+["']?\s*\n?)*)/m)?.[1] ?? "";
+    const triggerMatches = [...triggerSection.matchAll(/^\s*-\s+["']?([^"'\n]+)["']?\s*$/gm)].map((match) => match[1].trim());
     const latentValue = block.match(/latent_value:\s*["']?([^"'\n]+)["']?/m)?.[1];
     return { id, triggers: triggerMatches, latentValue };
   });

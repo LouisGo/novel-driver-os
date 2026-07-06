@@ -31,6 +31,13 @@ npm run build
 npm run dev -- <command>
 ```
 
+协议回归检查：
+
+```bash
+npm run typecheck
+npm test
+```
+
 构建后可用：
 
 ```bash
@@ -205,4 +212,3 @@ MVP 只提供 `MockModelAdapter` 和接口：
 - `ModelCapabilities`
 
 未来可以接 OpenAI、Claude、DeepSeek、Codex、OpenCode 或本地模型，但所有 AI 步骤都必须通过 adapter，且输出仍只能是候选、补丁或报告。
-

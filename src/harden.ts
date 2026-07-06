@@ -1,6 +1,6 @@
 import path from "node:path";
 import { ensureDir, listFilesRecursive, pathExists, readText, writeText } from "./fs-utils.js";
-import { projectRoot } from "./paths.js";
+import { assertSafeId, projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
 
 const HARDEN_FILES = [
@@ -14,11 +14,11 @@ const HARDEN_FILES = [
 ];
 
 export async function hardenVolume(projectName: string, volumeId: string): Promise<string> {
+  assertSafeId(volumeId, "volumeId");
   const root = projectRoot(projectName);
   const candidates = [
     path.join(root, "50_chapters/cold", volumeId),
     path.join(root, "50_chapters/warm", volumeId),
-    path.join(root, "01_intake"),
   ];
   let sourceDir: string | undefined;
   for (const candidate of candidates) {
@@ -26,6 +26,9 @@ export async function hardenVolume(projectName: string, volumeId: string): Promi
       sourceDir = candidate;
       break;
     }
+  }
+  if (!sourceDir) {
+    throw new Error(`Volume source not found: ${volumeId}. Expected 50_chapters/cold/${volumeId} or 50_chapters/warm/${volumeId}.`);
   }
   const sourceFiles = sourceDir ? await listFilesRecursive(sourceDir) : [];
   const snippets = await readSnippets(sourceFiles);

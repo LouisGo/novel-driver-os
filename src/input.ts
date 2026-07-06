@@ -19,6 +19,7 @@ import {
 } from "./fs-utils.js";
 import { projectRoot, relativeToProject, safeName } from "./paths.js";
 import { compactTimestamp, nowIso } from "./time.js";
+import { appendDiscardedBrillianceCandidate } from "./discarded.js";
 
 export interface PacketLocation {
   packet: AuthorInputPacket;
@@ -43,6 +44,9 @@ export async function ingestInput(projectName: string, filePath: string): Promis
   const packet = buildAuthorInputPacket(projectName, rawText, rawTarget, inputId);
   const packetDir = packet.status === "ignored" ? "ignored" : "triaged";
   await writeYaml(path.join(root, "00_inbox", packetDir, `${inputId}.yaml`), packet);
+  if (packet.detected_type === "discarded_idea" && packet.status !== "ignored") {
+    await appendDiscardedBrillianceCandidate(projectName, inputId, rawText);
+  }
   return packet;
 }
 

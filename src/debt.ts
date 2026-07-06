@@ -2,7 +2,7 @@ import path from "node:path";
 import { readYaml, writeYaml } from "./fs-utils.js";
 import { projectRoot } from "./paths.js";
 import { nowIso } from "./time.js";
-import { RetconDebtSchema } from "./schemas.js";
+import { RetconDebtSchema, RetconSeveritySchema } from "./schemas.js";
 
 export interface DebtAddOptions {
   chapter: string;
@@ -14,12 +14,13 @@ export interface DebtAddOptions {
 export async function addDebt(projectName: string, options: DebtAddOptions): Promise<void> {
   const filePath = debtPath(projectName);
   const ledger = RetconDebtSchema.parse(await readYaml(filePath));
+  const severity = RetconSeveritySchema.parse(options.severity || "low");
   ledger.entries.push({
     chapter: options.chapter,
     issue: options.issue,
     accepted_solution: options.solution,
     debt_type: "continuity_patch",
-    severity: options.severity || "low",
+    severity,
     created_at: nowIso(),
   });
   ledger.current_arc_total = ledger.entries.length;

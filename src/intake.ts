@@ -127,22 +127,105 @@ ${tentative || "_No tentative vibes._"}
 
 function buildFactDelta(packet: AuthorInputPacket, rawText: string): unknown {
   const chapter = packet.target_scope.chapter ?? "unknown_chapter";
-  const firstLine = meaningfulLines(rawText)[0] ?? "作者提交了新的章节文本。";
+  const units = proseUnits(rawText);
+  const newFacts = concreteFactCandidates(units).slice(0, 6);
+  const fallbackAnchor = meaningfulLines(rawText)[0];
   return {
     chapter,
     source: "human",
-    new_facts: [
-      `作者提交了 ${chapter} 的正文/片段。`,
-      `文本锚点：${firstLine}`,
-    ],
-    character_changes: packet.target_scope.entity
-      ? { [packet.target_scope.entity]: ["存在新的行为或关系表达候选，需作者确认。"] }
-      : {},
-    hooks_opened: ["该输入可能打开新的情绪、关系或剧情钩子，需人工确认。"],
-    hooks_closed: [],
-    constraints_for_future: ["不得把本次 mock intake 的推断直接写入正史。"],
+    new_facts: newFacts.length > 0
+      ? newFacts
+      : [fallbackAnchor ? `文本锚点（待人工判断是否为剧情事实）：${compactText(fallbackAnchor)}` : "未自动提取到足够具体的剧情事实，需人工补录。"],
+    character_changes: buildCharacterChanges(packet, units),
+    hooks_opened: buildHooksOpened(units),
+    hooks_closed: buildHooksClosed(units),
+    constraints_for_future: buildFactDeltaConstraints(rawText),
     source_refs: [{ file: packet.raw_source_path }],
   };
+}
+
+function concreteFactCandidates(units: string[]): string[] {
+  return uniqueStrings(units.filter(isConcretePlotUnit).map((unit) => compactText(unit)));
+}
+
+function isConcretePlotUnit(unit: string): boolean {
+  const clean = unit.trim();
+  if (clean.length < 6) return false;
+  if (/^(第[一二三四五六七八九十百\d]+[章节]|chapter\s*\d+|正文|设定|大纲)[:：]?/i.test(clean)) return false;
+  const hasActor = /林砚|莱恩|艾琳娜|主角|男主|女主|他|她|我|少年|少女|老人|小女孩|男人|女人|骑士|神父|龙|黑钟|守卫|母亲|白手套/.test(clean);
+  const hasAction = /醒|看|听|问|说|答|走|跑|逃|追|抓|按|推|挡|写|划|撬|拔|压|藏|救|杀|死|疼|痛|流血|熄灭|响|浮现|落|偏|回头|递|握|低头|抬头|笑|哭|吐|跪|打开|关上|发现|证明|承认|拒绝|选择|记住|忘|失去|破|裂|烧|亮|消失|出现|喝|补|咬|盯/.test(clean);
+  const hasConcreteObject = /铜币|残页|黑钟|红纹|龙骨|手套|伞|门|锁|血|伤口|名字|债名|契约|法术|誊本|银盐|面包|木牌/.test(clean);
+  return (hasActor && hasAction) || (hasConcreteObject && hasAction);
+}
+
+function buildCharacterChanges(packet: AuthorInputPacket, units: string[]): Record<string, string[]> {
+  const changes: Record<string, string[]> = {};
+  const characterMatchers: Array<[string, RegExp]> = [
+    ["lin_yan", /林砚|莱恩/],
+    ["ailinna", /艾琳娜/],
+    ["protagonist", /主角|男主|我|他/],
+    ["heroine", /女主|她/],
+  ];
+
+  for (const [key, matcher] of characterMatchers) {
+    const matched = concreteFactCandidates(units.filter((unit) => matcher.test(unit))).slice(0, 4);
+    if (matched.length > 0) changes[key] = matched;
+  }
+
+  if (packet.target_scope.entity && !changes[packet.target_scope.entity]) {
+    const matched = concreteFactCandidates(units).slice(0, 3);
+    if (matched.length > 0) changes[packet.target_scope.entity] = matched;
+  }
+
+  return changes;
+}
+
+function buildHooksOpened(units: string[]): string[] {
+  const tailFirst = [...units.slice(-10), ...units.slice(0, -10)];
+  const hookRules: Array<[string, RegExp]> = [
+    ["身份/穿越错位钩子", /穿越|现代|手机|电脑|地球|名字|债名|旧名|莱恩|Lin Yan/],
+    ["龙与法术长线钩子", /龙|龙骨|龙语|瓦尔卡洛斯|法术|契约/],
+    ["教会/黑钟规则钩子", /教会|审判|神父|誊本|黑钟|银盐/],
+    ["旧案证据钩子", /残页|旧案|白手套|证据|真相/],
+    ["关系潜台词钩子", /别死|伞|偏了半寸|她没有回头|艾琳娜.*(?:看他|抓住|推|低头)|她.*(?:看他|抓住他的|推)/],
+    ["生死压力钩子", /死|杀|血|伤|追|逃|活下来|疼|痛/],
+  ];
+
+  const hooks: string[] = [];
+  for (const [label, matcher] of hookRules) {
+    const evidence = tailFirst.find((unit) => matcher.test(unit));
+    if (evidence) hooks.push(`${label}：${compactText(evidence)}`);
+  }
+  return uniqueStrings(hooks).slice(0, 6);
+}
+
+function buildHooksClosed(units: string[]): string[] {
+  const closeRules: Array<[string, RegExp]> = [
+    ["局部冲突暂时收束", /熄灭|退下|散开|停下|断开|结束|放过/],
+    ["信息问题获得阶段答案", /露馅|真相|答案|说出|揭开|交代/],
+    ["生存压力暂时解除", /救下|活下来|止血|脱身|逃出/],
+  ];
+
+  const closed: string[] = [];
+  for (const [label, matcher] of closeRules) {
+    const evidence = units.find((unit) => matcher.test(unit));
+    if (evidence) closed.push(`${label}：${compactText(evidence)}`);
+  }
+  return uniqueStrings(closed).slice(0, 4);
+}
+
+function buildFactDeltaConstraints(rawText: string): string[] {
+  const constraints = [
+    "本文件是候选 fact_delta，不得直接写入 canon_registry.md。",
+    "所有人物状态、伏笔和钩子需作者确认后才能进入长期记忆。",
+  ];
+  if (/能力|法术|龙语|契约|债名|黑钟|誊本|银盐/.test(rawText)) {
+    constraints.push("法术、契约、债名或教会规则只按候选记录，需确认边界、代价和例外。");
+  }
+  if (/系统提示|系统面板|属性面板|任务奖励|面板|等级/.test(rawText)) {
+    constraints.push("若保留系统/面板元素，需明确代价与限制，避免无代价外挂。");
+  }
+  return constraints;
 }
 
 function buildAtmosphereTriads(packet: AuthorInputPacket, rawText: string): string {
@@ -267,6 +350,10 @@ candidate only，不进入 style_bible，等待 Weekly Alignment 或作者确认
 
 function buildMemoryPatch(packet: AuthorInputPacket, rawText: string): unknown {
   const chapter = packet.target_scope.chapter ?? "unknown_chapter";
+  const units = proseUnits(rawText);
+  const facts = concreteFactCandidates(units);
+  const hooks = buildHooksOpened(units);
+  const characterChanges = buildCharacterChanges(packet, units);
   return {
     patch_id: `patch_${packet.input_id}_001`,
     requires_human_approval: true,
@@ -276,19 +363,15 @@ function buildMemoryPatch(packet: AuthorInputPacket, rawText: string): unknown {
       timeline: {
         add_event: {
           chapter,
-          event: `作者提交了 ${chapter} 的正文/片段，需人工确认后再抽取正式事件。`,
+          event: facts[0] ?? "未自动提取到足够具体的剧情事件，需人工补录。",
         },
       },
       unresolved_hooks: {
-        add: ["从本次输入中确认是否存在关系、危险或留白钩子。"],
+        add: hooks.length > 0 ? hooks : ["未自动识别明确新钩子，需人工确认章末追问。"],
       },
-      characters: packet.target_scope.entity
-        ? {
-            [packet.target_scope.entity]: {
-              candidates: ["本次文本可能包含新的情绪表达规则或关系状态。"],
-            },
-          }
-        : {},
+      characters: Object.fromEntries(
+        Object.entries(characterChanges).map(([entity, candidates]) => [entity, { candidates }]),
+      ),
       raw_evidence_excerpt: rawText.trim().slice(0, 300),
     },
   };
@@ -480,24 +563,23 @@ function buildQualityDimensions(
 function collectTextSignals(chapterText: string, firstLine: string, tail: string) {
   const environmentOpeningSignal = isEnvironmentOpening(firstLine);
   const protagonistAnchor = /林砚|主角|他|她|我/.test(firstLine) && !environmentOpeningSignal;
-  const openingHook = /刀|血|死|醒|追|逃|审判|失控|不能|没有|吐|痛|危险|杀|问|错|门锁/.test(firstLine);
+  const openingHook = /刀|血|死|醒|追|逃|审判|失控|不能|没有|吐|痛|危险|杀|问|错|门锁|铜币|名字|债名|黑钟|龙/.test(firstLine);
   const pressure = /死|杀|刀|血|疼|痛|追|逃|审判|危险|失控|不能|必须|代价|忘|丢/.test(chapterText);
   const action = /写|划|挡|跑|逃|问|抓|按|推|救|证明|看|撬|拔|压|补|喝|藏/.test(chapterText);
   const goal = /要|想|必须|不能|证明|活|找|救|逃|知道|确认/.test(chapterText);
-  const payoffTerms = chapterText.match(/反噬|证明|露馅|改口|熄灭|救|赢|发现|断开|指向|看见|活下来/g) ?? [];
-  const payoff = payoffTerms.length > 0;
+  const payoffEvidence = payoffEvidenceUnits(chapterText);
+  const payoff = payoffEvidence.length > 0;
   const costTerms = chapterText.match(/代价|忘|失去|丢|疼|痛|伤|血|不能|风险|记忆|声音/g) ?? [];
   const cost = costTerms.length > 0;
-  const chapterEndHook = /[？?]|响|声音|浮现|看见|回答|等|呼吸|名字|钟|龙|红纹|低下头|安静/.test(tail);
+  const chapterEndHook = isConcreteChapterEndHook(tail);
   const curiosity = /为什么|谁|名字|残页|旧案|债名|黑钟|龙|秘密|真相|不是/.test(chapterText);
   const infoLoadRisk = (chapterText.match(/世界|规则|契约|教会|龙语|债名|银盐|誊本|灰港|黑钟/g) ?? []).length > 36;
   const paragraphLengths = chapterText.split(/\n\s*\n/).map((paragraph) => paragraph.trim().length).filter(Boolean);
   const paragraphUniformityRisk = paragraphLengths.length > 8 && paragraphLengths.every((value) => value >= 40 && value <= 180);
-  const humanTextureMatches = chapterText.match(/母亲|手机号|小名|面包|鞋|老人|小女孩|栗子|木牌|手套|语音|文档|电|门禁|汗|血|舌尖|指甲|早餐|旧伤|斗篷|鱼骨/g) ?? [];
+  const humanTextureMatches = chapterText.match(/母亲|手机号|小名|面包|鞋|老人|小女孩|栗子|木牌|手套|语音|文档|电|门禁|汗|血|舌尖|指甲|早餐|旧伤|斗篷|鱼骨|铜币|伞|袖口|掌心|牙齿|伤口|灰|雨水|油灯/g) ?? [];
   const humanTextureEvidence = evidenceForKeywords(chapterText, humanTextureMatches.slice(0, 5));
   const aiFlavorRiskCount = (chapterText.match(/然而|仿佛|某种|显得|由此可见|总的来说|古老|神秘|宏伟/g) ?? []).length;
   const systemPanelRisk = /系统提示|系统面板|属性面板|任务奖励|面板|等级/.test(chapterText);
-  const payoffEvidence = evidenceForKeywords(chapterText, payoffTerms.slice(0, 4));
   const costEvidence = evidenceForKeywords(chapterText, costTerms.slice(0, 4));
   return {
     protagonistAnchor,
@@ -518,6 +600,25 @@ function collectTextSignals(chapterText: string, firstLine: string, tail: string
     aiFlavorRiskCount,
     systemPanelRisk,
   };
+}
+
+function payoffEvidenceUnits(chapterText: string): string[] {
+  const units = proseUnits(chapterText);
+  const usable = units.filter((unit) => !/是否承认|有资格不承认|不承认|不是来救|证明流程本身会炸/.test(unit));
+  const outcomePayoff = usable.filter((unit) => {
+    return /救下|救了|救回|救他|救她|活下来|断开|脱身|止血|退下|熄灭|破局|识破|露馅|揭开|反噬|反转|小胜|压住/.test(unit);
+  });
+  const informationPayoff = usable.filter((unit) => {
+    return /发现.*(?:真相|证据|名字|线索)|指向.*(?:真相|证据|名字|线索)|证明.*(?:错误|身份|清白)/.test(unit);
+  });
+  return uniqueStrings([...outcomePayoff, ...informationPayoff].map((unit) => compactText(unit))).slice(0, 4);
+}
+
+function isConcreteChapterEndHook(tail: string): boolean {
+  const clean = tail.trim();
+  if (!clean) return false;
+  if (/更大的危机即将来临|一切才刚刚开始|命运的齿轮/.test(clean)) return false;
+  return /[？?]|别死|死|杀|响|声音|浮现|回答|等|呼吸|名字|债名|钟|黑钟|龙|红纹|残页|旧案|低下头|安静|门|锁|谁|不是/.test(clean);
 }
 
 function isEnvironmentOpening(line: string): boolean {
@@ -579,7 +680,7 @@ function longHookCandidates(chapterText: string): string[] {
 
 function evidenceForKeywords(chapterText: string, keywords: string[]): string[] {
   const unique = [...new Set(keywords)].slice(0, 4);
-  const lines = meaningfulLines(chapterText);
+  const lines = proseUnits(chapterText);
   return unique
     .map((keyword) => lines.find((line) => line.includes(keyword)))
     .filter((value): value is string => Boolean(value))
@@ -640,16 +741,52 @@ function meaningfulLines(rawText: string): string[] {
     .filter((line) => line && !line.startsWith("#"));
 }
 
+function proseUnits(rawText: string): string[] {
+  return meaningfulLines(rawText)
+    .flatMap(splitLineIntoUnits)
+    .map((unit) => unit.trim())
+    .filter((unit) => unit.length > 0);
+}
+
+function splitLineIntoUnits(line: string): string[] {
+  const chars = Array.from(line);
+  const units: string[] = [];
+  let buffer = "";
+  for (let index = 0; index < chars.length; index += 1) {
+    const char = chars[index];
+    buffer += char;
+    if ("。！？!?；;".includes(char)) {
+      const next = chars[index + 1];
+      if (next && "”\"’'」』".includes(next)) {
+        buffer += next;
+        index += 1;
+      }
+      units.push(buffer.trim());
+      buffer = "";
+    }
+  }
+  if (buffer.trim()) units.push(buffer.trim());
+  return units;
+}
+
 function evidenceLines(rawText: string): string[] {
   const lines = meaningfulLines(rawText);
   return lines.length > 0 ? lines.slice(0, 4) : [rawText.trim().slice(0, 160)];
 }
 
 function quoteEvidence(value: string): string {
-  const clean = value.replace(/\s+/g, " ").trim();
+  const clean = compactText(value, 160);
   if (!clean) return "（无可用原文证据）";
   if ((clean.startsWith("“") && clean.endsWith("”")) || (clean.startsWith("\"") && clean.endsWith("\""))) {
-    return clean.slice(0, 160);
+    return clean;
   }
-  return `“${clean.slice(0, 160)}”`;
+  return `“${clean}”`;
+}
+
+function compactText(value: string, maxLength = 180): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return values.filter((value, index) => value && values.indexOf(value) === index);
 }

@@ -71,6 +71,23 @@ test("chapter intake writes a chapter quality review", { concurrency: false }, a
     const packet = await ingestChapter(root);
     await createChapterIntake("black_tower", packet.input_id);
 
+    const factDeltaPath = path.join(root, "projects/black_tower/01_intake", packet.input_id, "fact_delta.yaml");
+    const factDelta = YAML.parse(await fs.readFile(factDeltaPath, "utf8"));
+    assert.ok(
+      factDelta.new_facts.some((item: string) => item.includes("她没有回头，只是把伞往他那边偏了半寸")),
+      YAML.stringify(factDelta),
+    );
+    assert.doesNotMatch(factDelta.new_facts.join("\n"), /作者提交了/);
+    assert.ok(
+      factDelta.hooks_opened.some((item: string) => /别死|生死|关系/.test(item)),
+      YAML.stringify(factDelta),
+    );
+
+    const memoryPatchPath = path.join(root, "projects/black_tower/01_intake", packet.input_id, "memory_patch.yaml");
+    const memoryPatch = YAML.parse(await fs.readFile(memoryPatchPath, "utf8"));
+    assert.match(memoryPatch.updates.timeline.add_event.event, /她没有回头/);
+    assert.doesNotMatch(memoryPatch.updates.timeline.add_event.event, /作者提交了/);
+
     const reviewPath = path.join(root, "projects/black_tower/01_intake", packet.input_id, "chapter_quality_review.md");
     const review = await fs.readFile(reviewPath, "utf8");
     assert.match(review, /review_type: chapter_quality_review/);
@@ -78,6 +95,7 @@ test("chapter intake writes a chapter quality review", { concurrency: false }, a
     assert.match(review, /decision:\s*(pass|minor_revision|major_revision|rewrite)/);
     assert.match(review, /## Scorecard/);
     assert.match(review, /主角锚定/);
+    assert.doesNotMatch(review, /chapter_end_hook: weak_or_missing/);
 
     const result = await validateProject("black_tower");
     assert.equal(result.ok, true, result.errors.join("\n"));
